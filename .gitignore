@@ -1,0 +1,21 @@
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Node (no dependencies are committed, but keep this in case a contributor
+# runs a package manager locally)
+node_modules/
+
+# Scratch space for local script runs
+/tmp/
+*.tmp
+
+# Never commit signing material
+*.key
+plugin.key
+*.minisig.tmp

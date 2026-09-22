@@ -1,0 +1,265 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/0xJacky/nginx-ui-plugins/main/schema/entry.schema.json",
+  "title": "Plugin Catalog Entry",
+  "description": "One plugin as authored in plugins/<id>.json. Mirrors internal/plugin.CatalogEntry in nginx-ui, minus the fields the host computes at fetch time (source, installable_release, installed_version, update_available).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "name",
+    "description",
+    "author",
+    "trust",
+    "stage",
+    "releases"
+  ],
+  "properties": {
+    "id": {
+      "$ref": "#/$defs/pluginId"
+    },
+    "name": {
+      "$ref": "#/$defs/localizedText"
+    },
+    "description": {
+      "$ref": "#/$defs/localizedText"
+    },
+    "author": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "author_public_key": {
+      "type": "string",
+      "description": "Minisign public key (text form) used to sign community releases. Required when trust is \"community\" and any release declares signed_by \"author\".",
+      "minLength": 1
+    },
+    "homepage_url": {
+      "$ref": "#/$defs/httpsUrl"
+    },
+    "repository_url": {
+      "$ref": "#/$defs/httpsUrl"
+    },
+    "readme_url": {
+      "$ref": "#/$defs/httpsUrl"
+    },
+    "icon_url": {
+      "$ref": "#/$defs/httpsUrl"
+    },
+    "categories": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "uniqueItems": true
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "uniqueItems": true
+    },
+    "license": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "description": "SPDX license identifier of the plugin's own source (e.g. MIT, Apache-2.0, AGPL-3.0-only)."
+    },
+    "trust": {
+      "$ref": "#/$defs/trust"
+    },
+    "stage": {
+      "$ref": "#/$defs/stage"
+    },
+    "releases": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/release"
+      }
+    }
+  },
+  "$defs": {
+    "pluginId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(\\.[a-z0-9-]+)+$",
+      "maxLength": 64,
+      "description": "Reverse-DNS style id (spec NAME-1). com.nginxui.* is reserved for official plugins (NAME-2); authors without a domain use io.github.<owner>.<name> (NAME-3)."
+    },
+    "locale": {
+      "type": "string",
+      "pattern": "^[a-z]{2,3}(_[A-Z]{2})?$",
+      "description": "BCP-47-ish locale key as used by nginx-ui's gettext catalogs, e.g. \"en\", \"zh_CN\", \"zh_TW\", \"ja_JP\"."
+    },
+    "localizedText": {
+      "type": "object",
+      "description": "Locale code to translated string. \"en\" is required as the fallback nginx-ui always falls back to.",
+      "required": [
+        "en"
+      ],
+      "minProperties": 1,
+      "propertyNames": {
+        "$ref": "#/$defs/locale"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "httpsUrl": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://"
+    },
+    "trust": {
+      "type": "string",
+      "enum": [
+        "official",
+        "verified",
+        "community"
+      ]
+    },
+    "stage": {
+      "type": "string",
+      "enum": [
+        "production",
+        "beta"
+      ]
+    },
+    "signedBy": {
+      "type": "string",
+      "enum": [
+        "official",
+        "author"
+      ]
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$",
+      "description": "Semantic Versioning 2.0.0, matching internal/plugin.semverPattern in nginx-ui."
+    },
+    "platform": {
+      "type": "string",
+      "pattern": "^(any|[a-z0-9]+-[a-z0-9]+)$",
+      "description": "\"<goos>-<goarch>\" (e.g. \"linux-amd64\") or \"any\" for a platform-independent package."
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "api_version",
+        "download_url"
+      ],
+      "properties": {
+        "version": {
+          "$ref": "#/$defs/semver"
+        },
+        "released_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "api_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "min_nginx_ui_version": {
+          "$ref": "#/$defs/semver"
+        },
+        "platforms": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/platform"
+          },
+          "uniqueItems": true,
+          "minItems": 1
+        },
+        "download_url": {
+          "$ref": "#/$defs/httpsUrl"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "signature_url": {
+          "$ref": "#/$defs/httpsUrl"
+        },
+        "signed_by": {
+          "$ref": "#/$defs/signedBy"
+        },
+        "release_notes_url": {
+          "$ref": "#/$defs/httpsUrl"
+        },
+        "yanked": {
+          "type": "boolean"
+        },
+        "manifest": {
+          "$ref": "#/$defs/manifestSnapshot"
+        }
+      }
+    },
+    "manifestSnapshot": {
+      "type": "object",
+      "description": "Snapshot of the release's plugin.json, used by the host to show permissions and capabilities before download (internal/plugin.CatalogRelease.Manifest, protocol.Manifest). Bulky sub-documents such as dns01.providers should be omitted here; the host itself only reads permissions, capabilities, requires, api_version and min_nginx_ui_version from this snapshot.",
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/pluginId"
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "$ref": "#/$defs/semver"
+        },
+        "description": {
+          "type": "string"
+        },
+        "api_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "min_nginx_ui_version": {
+          "$ref": "#/$defs/semver"
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/pluginId"
+              },
+              "version": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,142 @@
+name: Validate
+
+# Runs on every pull request. The schema job always runs and always must
+# pass. The per-release checks only run for entries the PR actually touches,
+# and degrade to a SKIP (not a failure) when a release asset, its signature,
+# or the official signing key are not available yet — see
+# scripts/ci/verify-release.mjs and scripts/ci/check-entry-repository.mjs.
+on:
+  pull_request:
+    paths:
+      - "plugins/**"
+      - "schema/**"
+      - "scripts/**"
+      - "codes.json"
+      - "v1/**"
+
+permissions:
+  contents: read
+
+jobs:
+  schema:
+    name: Schema and structural checks
+    runs-on: ubuntu-latest
+    outputs:
+      changed_entries: ${{ steps.changed.outputs.entries }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: node scripts/validate.mjs
+        run: node scripts/validate.mjs
+
+      - name: node scripts/build-index.mjs --check
+        run: node scripts/build-index.mjs --check
+
+      - id: changed
+        name: List plugin entries this PR touches
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.sha }}"
+          files=$(git diff --name-only --diff-filter=ACM "${base}" "${head}" -- 'plugins/*.json' || true)
+          echo "Changed entries:"
+          echo "${files}"
+          {
+            echo "entries<<EOF"
+            echo "${files}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+  release-integrity:
+    name: Release integrity (sha256, signature, repository)
+    needs: schema
+    if: needs.schema.outputs.changed_entries != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install minisign
+        run: sudo apt-get update && sudo apt-get install -y minisign
+
+      - name: Check each changed entry against its GitHub repository
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          while IFS= read -r file; do
+            [ -z "${file}" ] && continue
+            echo "::group::${file}"
+            node scripts/ci/check-entry-repository.mjs "${file}"
+            echo "::endgroup::"
+          done <<'EOF'
+          ${{ needs.schema.outputs.changed_entries }}
+          EOF
+
+      - name: Verify sha256 and minisign signature for each changed entry
+        env:
+          PLUGIN_SIGNING_PUBLIC_KEY: ${{ vars.PLUGIN_SIGNING_PUBLIC_KEY }}
+        run: |
+          set -e
+          while IFS= read -r file; do
+            [ -z "${file}" ] && continue
+            echo "::group::${file}"
+            node scripts/ci/verify-release.mjs "${file}"
+            echo "::endgroup::"
+          done <<'EOF'
+          ${{ needs.schema.outputs.changed_entries }}
+          EOF
+
+  lint-conformance:
+    name: nginx-ui plugin lint / conformance
+    needs: schema
+    if: needs.schema.outputs.changed_entries != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Download each changed entry's package and run lint + conformance
+        run: |
+          set -e
+          mkdir -p /tmp/pkg
+          while IFS= read -r file; do
+            [ -z "${file}" ] && continue
+            id=$(node -e "console.log(JSON.parse(require('fs').readFileSync('${file}','utf8')).id)")
+            url=$(node -e "const e=JSON.parse(require('fs').readFileSync('${file}','utf8'));const r=[...e.releases].sort((a,b)=>a.version<b.version?-1:1).at(-1);console.log(r.download_url)")
+
+            echo "::group::${id}"
+            archive="/tmp/pkg/${id}.tar.gz"
+            if ! curl -fsSL -o "${archive}" "${url}"; then
+              echo "SKIP ${id}: ${url} is not reachable yet, nothing to lint"
+              echo "::endgroup::"
+              continue
+            fi
+
+            echo "running nginx-ui plugin lint"
+            docker run --rm -v "${archive}:/pkg/${id}.tar.gz:ro" uozicoder/nginx-ui \
+              nginx-ui plugin lint "/pkg/${id}.tar.gz"
+
+            echo "running nginx-ui plugin conformance"
+            docker run --rm -v "${archive}:/pkg/${id}.tar.gz:ro" uozicoder/nginx-ui \
+              nginx-ui plugin conformance "/pkg/${id}.tar.gz" || {
+                echo "conformance requires starting the plugin's own executable for this platform;"
+                echo "a plugin with no linux-amd64 executable, or one needing capabilities this runner"
+                echo "cannot provide, is expected to report failures here — read the case list above."
+                exit 1
+              }
+            echo "::endgroup::"
+          done <<'EOF'
+          ${{ needs.schema.outputs.changed_entries }}
+          EOF

@@ -1,0 +1,48 @@
+name: Build index
+
+# Keeps v1/index.json — the document nginx-ui hosts actually fetch — in sync
+# with plugins/*.json. Pull requests only ever touch plugins/*.json /
+# codes.json; this is the one workflow allowed to push straight to main.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "plugins/**"
+      - "scripts/build-index.mjs"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-index
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # A real user token would be needed to trigger further workflows
+          # from this push; the default GITHUB_TOKEN is fine here since
+          # nothing needs to react to this commit besides the next fetch by
+          # an nginx-ui host.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - run: node scripts/build-index.mjs
+
+      - name: Commit v1/index.json if it changed
+        run: |
+          if git diff --quiet -- v1/index.json; then
+            echo "v1/index.json is already up to date"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add v1/index.json
+          git commit -m "chore: regenerate v1/index.json"
+          git push
