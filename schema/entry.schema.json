@@ -144,21 +144,53 @@
     },
     "platform": {
       "type": "string",
-      "pattern": "^(any|[a-z0-9]+-[a-z0-9]+)$",
-      "description": "\"<goos>-<goarch>\" (e.g. \"linux-amd64\") or \"any\" for a platform-independent package."
+      "pattern": "^([a-z0-9]+-[a-z0-9]+|any)$",
+      "description": "\"<goos>-<goarch>\" (e.g. \"linux-amd64\") as Go spells them, or \"any\" for a platform-independent package. Matches schema/catalog.schema.json's platformKey in nginx-ui-plugin-spec (NAME-9)."
     },
     "sha256": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
+    },
+    "download": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "url"
+      ],
+      "description": "RFC 0001 PKG-14: one per-platform package of a release, an entry of \"downloads\".",
+      "properties": {
+        "url": {
+          "$ref": "#/$defs/httpsUrl"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "signature_url": {
+          "$ref": "#/$defs/httpsUrl",
+          "description": "Detached minisign signature, defaults to url + \".minisig\"."
+        }
+      }
     },
     "release": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "version",
-        "api_version",
-        "download_url"
+        "api_version"
       ],
+      "anyOf": [
+        {
+          "required": [
+            "download_url"
+          ]
+        },
+        {
+          "required": [
+            "downloads"
+          ]
+        }
+      ],
+      "description": "RFC 0001: a release needs at least one of download_url (the portable package) or downloads (per-platform packages); both may be present.",
       "properties": {
         "version": {
           "$ref": "#/$defs/semver"
@@ -180,10 +212,23 @@
             "$ref": "#/$defs/platform"
           },
           "uniqueItems": true,
-          "minItems": 1
+          "minItems": 1,
+          "description": "Summary of where the release installs: every key of downloads plus the platforms the portable package serves. Empty or absent means the portable package runs everywhere."
+        },
+        "downloads": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/platform"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/download"
+          },
+          "minProperties": 1,
+          "description": "RFC 0001 PKG-14: per-platform packages, keyed by \"<goos>-<goarch>\" or \"any\". A host picks downloads[platform], then downloads[\"any\"], then the portable package (PKG-15)."
         },
         "download_url": {
-          "$ref": "#/$defs/httpsUrl"
+          "$ref": "#/$defs/httpsUrl",
+          "description": "The portable package, the fallback for every platform downloads does not name. Optional once downloads is present."
         },
         "sha256": {
           "$ref": "#/$defs/sha256"

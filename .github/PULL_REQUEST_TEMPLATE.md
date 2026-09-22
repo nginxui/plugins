@@ -13,9 +13,12 @@
 
 ### If this adds or updates a `plugins/<id>.json`
 
-- [ ] `download_url` / `signature_url` point at a real GitHub Release asset.
-- [ ] `sha256` matches the asset (official entries: leave blank, see
-      `docs/signing.md`).
+- [ ] `download_url` / `signature_url` (portable package), and/or each
+      `downloads[<platform>]`'s `url` / `signature_url`, point at a real
+      GitHub Release asset. At least one of `download_url` or `downloads` is
+      present, and every `downloads` key is also listed in `platforms`.
+- [ ] `sha256` (portable and/or per-platform) matches its asset (official
+      entries: leave blank, see `docs/signing.md`).
 - [ ] `trust` and `signed_by` are consistent (see `README.md#trust-levels`).
 - [ ] Any new `dns01` provider `code` is registered in `codes.json` (run
       `node scripts/generate-codes.mjs <path-to-plugin.json>`).

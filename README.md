@@ -49,13 +49,19 @@ https://raw.githubusercontent.com/0xJacky/nginx-ui-plugins/main/v1/index.json
 
 For each entry, nginx-ui picks the newest release whose `api_version` it
 speaks, whose `platforms` list (or `"any"`) covers the host, and whose
-`min_nginx_ui_version` the running version satisfies. Before installing it,
-the host:
+`min_nginx_ui_version` the running version satisfies. A release may publish a
+single portable package (`download_url`), one package per platform
+(`downloads`, keyed by `"<goos>-<goarch>"` or `"any"`), or both — see
+[RFC 0001](https://github.com/0xJacky/nginx-ui-plugin-spec/blob/main/spec/rfcs/0001-per-platform-packages.md)
+in `nginx-ui-plugin-spec`. The host picks `downloads[<its platform>]`, then
+`downloads["any"]`, then falls back to the portable package. Before
+installing the selected package, the host:
 
-1. Downloads `download_url` and checks it against `sha256`.
-2. Verifies the detached signature at `signature_url` (or `download_url +
-   ".minisig"` when `signature_url` is absent) against a trusted minisign
-   key — see [Trust levels](#trust-levels) and `docs/signing.md`.
+1. Downloads its `url` (`download_url` for the portable package) and checks
+   it against its `sha256`.
+2. Verifies the detached signature at its `signature_url` (or the package
+   `url + ".minisig"` when `signature_url` is absent) against a trusted
+   minisign key — see [Trust levels](#trust-levels) and `docs/signing.md`.
 3. Confirms the downloaded package's own `plugin.json` reports the same `id`
    and `version` the catalog promised, so a compromised mirror cannot swap a
    well-known id for something else.
@@ -131,8 +137,9 @@ node scripts/build-index.mjs   # regenerate v1/index.json from plugins/*.json
 `schema/entry.schema.json`, that `v1/index.json` matches
 `schema/catalog.schema.json` and is up to date with `plugins/*.json`, that
 plugin ids are unique, that the naming policy above holds, that a release's
-`signed_by` is consistent with its entry's `trust`, and that `codes.json`
-covers every `dns01` provider code a manifest snapshot declares.
+`signed_by` is consistent with its entry's `trust`, that every `downloads`
+key is a valid platform key listed in that release's `platforms`, and that
+`codes.json` covers every `dns01` provider code a manifest snapshot declares.
 
 ## License
 

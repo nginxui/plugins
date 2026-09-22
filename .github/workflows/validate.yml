@@ -114,7 +114,14 @@ jobs:
           while IFS= read -r file; do
             [ -z "${file}" ] && continue
             id=$(node -e "console.log(JSON.parse(require('fs').readFileSync('${file}','utf8')).id)")
-            url=$(node -e "const e=JSON.parse(require('fs').readFileSync('${file}','utf8'));const r=[...e.releases].sort((a,b)=>a.version<b.version?-1:1).at(-1);console.log(r.download_url)")
+            # This runner is linux-amd64: select the same package a
+            # linux-amd64 nginx-ui host would install (RFC 0001 PKG-15),
+            # whether the release ships one portable package, one per
+            # platform, or both.
+            if ! url=$(node scripts/ci/select-download.mjs "${file}" linux-amd64); then
+              echo "SKIP ${id}: no linux-amd64 package in the newest release, nothing to lint"
+              continue
+            fi
 
             echo "::group::${id}"
             archive="/tmp/pkg/${id}.tar.gz"

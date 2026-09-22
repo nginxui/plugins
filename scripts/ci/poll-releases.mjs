@@ -16,6 +16,7 @@ import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { parseGithubRepoUrl, getLatestRelease, fetchRawFile, downloadBinary } from './github.mjs'
 import { platformsFromManifest, trimManifestSnapshot } from './manifest-snapshot.mjs'
+import { findPortableAsset, buildDownloadsMap } from './release-assets.mjs'
 import { compareSemver } from './semver.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
@@ -25,46 +26,56 @@ function newestRelease(entry) {
   return [...(entry.releases ?? [])].sort((a, b) => compareSemver(a.version, b.version)).at(-1)
 }
 
-function findAsset(assets, predicate) {
-  return assets.find(predicate)
-}
-
+/**
+ * Builds a new releases[] entry from a GitHub Release: the portable package
+ * ("<id>-<version>.tar.gz") when published, the per-platform packages RFC
+ * 0001 added ("<id>-<version>-<goos>-<goarch>.tar.gz") when published, or
+ * both — a release may ship either form, or one of each.
+ */
 async function buildNewRelease(entry, ghRelease, manifest, token) {
   const version = ghRelease.tag_name.replace(/^v/, '')
   const previous = newestRelease(entry)
   const signedBy = previous?.signed_by ?? (entry.trust === 'community' ? 'author' : 'official')
+  // Official entries are signed by the catalog's own CI in a follow-up step
+  // (docs/signing.md); everyone else's package already carries the hash
+  // that matters, so compute it now rather than leaving the entry
+  // unverifiable.
+  const includeSha256 = entry.trust !== 'official'
 
-  const packageAsset = findAsset(ghRelease.assets, a => a.name === `${entry.id}-${version}.tar.gz`)
-    ?? findAsset(ghRelease.assets, a => a.name.endsWith('.tar.gz'))
-  if (!packageAsset) {
-    console.warn(`  no .tar.gz asset found on ${ghRelease.html_url}, skipping`)
+  const portableAsset = findPortableAsset(ghRelease.assets, entry.id, version)
+  const { downloads } = await buildDownloadsMap(ghRelease.assets, entry.id, version, { includeSha256, token })
+
+  if (!portableAsset && Object.keys(downloads).length === 0) {
+    console.warn(`  no ${entry.id}-${version}.tar.gz or per-platform package found on ${ghRelease.html_url}, skipping`)
     return null
   }
 
-  const sigAsset = findAsset(ghRelease.assets, a => a.name === `${packageAsset.name}.minisig`)
+  let downloadUrl, sha256, signatureUrl
+  if (portableAsset) {
+    downloadUrl = portableAsset.browser_download_url
+    const sigAsset = ghRelease.assets.find(a => a.name === `${portableAsset.name}.minisig`)
+    if (sigAsset)
+      signatureUrl = sigAsset.browser_download_url
+    if (includeSha256) {
+      const bytes = await downloadBinary(portableAsset.browser_download_url, token)
+      sha256 = createHash('sha256').update(bytes).digest('hex')
+    }
+  }
 
-  const release = {
+  return {
     version,
     released_at: ghRelease.published_at ?? ghRelease.created_at,
     api_version: manifest.api_version,
     ...(manifest.min_nginx_ui_version ? { min_nginx_ui_version: manifest.min_nginx_ui_version } : {}),
     platforms: platformsFromManifest(manifest),
-    download_url: packageAsset.browser_download_url,
-    ...(sigAsset ? { signature_url: sigAsset.browser_download_url } : {}),
+    ...(Object.keys(downloads).length > 0 ? { downloads } : {}),
+    ...(downloadUrl ? { download_url: downloadUrl } : {}),
+    ...(sha256 ? { sha256 } : {}),
+    ...(signatureUrl ? { signature_url: signatureUrl } : {}),
     signed_by: signedBy,
     release_notes_url: ghRelease.html_url,
     manifest: trimManifestSnapshot(manifest),
   }
-
-  // Official entries are signed by the catalog's own CI in a follow-up step
-  // (docs/signing.md); everyone else's asset already carries the hash that
-  // matters, so compute it now rather than leaving the entry unverifiable.
-  if (entry.trust !== 'official') {
-    const bytes = await downloadBinary(packageAsset.browser_download_url, token)
-    release.sha256 = createHash('sha256').update(bytes).digest('hex')
-  }
-
-  return release
 }
 
 async function processEntry(file, token) {

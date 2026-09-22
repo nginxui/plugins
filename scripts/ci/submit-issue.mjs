@@ -12,8 +12,10 @@
 import { readFileSync, writeFileSync, existsSync, appendFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import { parseGithubRepoUrl, getLatestRelease, fetchRawFile } from './github.mjs'
+import { createHash } from 'node:crypto'
+import { parseGithubRepoUrl, getLatestRelease, fetchRawFile, downloadBinary } from './github.mjs'
 import { platformsFromManifest, trimManifestSnapshot } from './manifest-snapshot.mjs'
+import { findPortableAsset, buildDownloadsMap } from './release-assets.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const PLUGINS_DIR = path.join(ROOT, 'plugins')
@@ -98,11 +100,23 @@ async function main() {
     fail(`plugin.json at ${release.tag_name} declares id "${manifest.id}", which does not match the submitted id "${pluginId}".`)
 
   const version = release.tag_name.replace(/^v/, '')
-  const packageAsset = release.assets.find(a => a.name === `${pluginId}-${version}.tar.gz`)
-    ?? release.assets.find(a => a.name.endsWith('.tar.gz'))
-  if (!packageAsset)
-    fail(`${release.html_url} has no .tar.gz package asset.`)
-  const sigAsset = release.assets.find(a => a.name === `${packageAsset.name}.minisig`)
+  const portableAsset = findPortableAsset(release.assets, pluginId, version)
+  // A first submission is always community trust, signed_by "author", so its
+  // sha256 must be real: computed here, not left for a follow-up (unlike an
+  // "official" entry, whose sha256 the signing step fills in later).
+  const { downloads } = await buildDownloadsMap(release.assets, pluginId, version, { includeSha256: true, token })
+  if (!portableAsset && Object.keys(downloads).length === 0)
+    fail(`${release.html_url} has no ${pluginId}-${version}.tar.gz or per-platform package asset.`)
+
+  let downloadUrl, sha256, signatureUrl
+  if (portableAsset) {
+    downloadUrl = portableAsset.browser_download_url
+    const sigAsset = release.assets.find(a => a.name === `${portableAsset.name}.minisig`)
+    if (sigAsset)
+      signatureUrl = sigAsset.browser_download_url
+    const bytes = await downloadBinary(portableAsset.browser_download_url, token)
+    sha256 = createHash('sha256').update(bytes).digest('hex')
+  }
 
   const entry = {
     id: pluginId,
@@ -126,8 +140,10 @@ async function main() {
         api_version: manifest.api_version,
         ...(manifest.min_nginx_ui_version ? { min_nginx_ui_version: manifest.min_nginx_ui_version } : {}),
         platforms: platformsFromManifest(manifest),
-        download_url: packageAsset.browser_download_url,
-        ...(sigAsset ? { signature_url: sigAsset.browser_download_url } : {}),
+        ...(Object.keys(downloads).length > 0 ? { downloads } : {}),
+        ...(downloadUrl ? { download_url: downloadUrl } : {}),
+        ...(sha256 ? { sha256 } : {}),
+        ...(signatureUrl ? { signature_url: signatureUrl } : {}),
         signed_by: 'author',
         release_notes_url: release.html_url,
         manifest: trimManifestSnapshot(manifest),

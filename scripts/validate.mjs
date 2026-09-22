@@ -23,6 +23,7 @@ const ENTRY_SCHEMA = path.join(ROOT, 'schema', 'entry.schema.json')
 const CATALOG_SCHEMA = path.join(ROOT, 'schema', 'catalog.schema.json')
 
 const PROVIDER_CODE_PATTERN = /^[a-z0-9-]{2,32}$/
+const PLATFORM_KEY_PATTERN = /^([a-z0-9]+-[a-z0-9]+|any)$/
 
 let errorCount = 0
 
@@ -138,6 +139,36 @@ function checkTrustAndSigning(entries) {
   ok('trust level matches signing policy')
 }
 
+/** RFC 0001 PKG-14/PKG-15: a release needs at least one of "downloads" or
+ * "download_url" (the schema's anyOf already enforces this structurally;
+ * repeated here for a clearer message, matching this file's existing style
+ * for cross-field checks the minimal schema validator cannot express on its
+ * own), every "downloads" key must be summarized in "platforms", and a key
+ * must be "<goos>-<goarch>" or "any". */
+function checkDownloadsPlatforms(entries) {
+  for (const [file, entry] of entries) {
+    for (const release of entry.releases ?? []) {
+      const downloadKeys = Object.keys(release.downloads ?? {})
+
+      if (downloadKeys.length === 0 && !release.download_url) {
+        fail(`plugins/${file}`, `release ${release.version} has neither "downloads" nor "download_url"; a release needs at least one package`)
+        continue
+      }
+
+      const platforms = release.platforms ?? []
+      for (const key of downloadKeys) {
+        if (!PLATFORM_KEY_PATTERN.test(key)) {
+          fail(`plugins/${file}`, `release ${release.version} downloads key ${JSON.stringify(key)} must match ${PLATFORM_KEY_PATTERN} or be "any"`)
+          continue
+        }
+        if (!platforms.includes(key))
+          fail(`plugins/${file}`, `release ${release.version} downloads key ${JSON.stringify(key)} is missing from "platforms"`)
+      }
+    }
+  }
+  ok('downloads keys are valid platform keys and are summarized in platforms')
+}
+
 /** NAME-4: a dns01 provider code is a shared namespace, registered once in
  * codes.json. This only checks entries whose manifest snapshot still carries
  * dns01.providers (a large plugin like com.nginxui.dns01 strips it from the
@@ -206,6 +237,7 @@ function main() {
   checkIdUniqueness(entries)
   checkNamingPolicy(entries)
   checkTrustAndSigning(entries)
+  checkDownloadsPlatforms(entries)
   checkProviderCodes(entries)
   checkIndex()
 

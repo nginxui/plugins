@@ -3,11 +3,11 @@
 // dependency on ajv or any other package so `node scripts/validate.mjs` runs
 // with nothing but a Node.js installation.
 //
-// Supported keywords: type, const, enum, $ref (local "#/$defs/..." and a
-// relative sibling schema file), properties, required, additionalProperties
-// (boolean or schema), propertyNames, minProperties, maxProperties, items,
-// minItems, maxItems, uniqueItems, minLength, maxLength, pattern,
-// minimum, maximum, format ("uri", "date-time").
+// Supported keywords: type, const, enum, anyOf, $ref (local "#/$defs/..."
+// and a relative sibling schema file), properties, required,
+// additionalProperties (boolean or schema), propertyNames, minProperties,
+// maxProperties, items, minItems, maxItems, uniqueItems, minLength,
+// maxLength, pattern, minimum, maximum, format ("uri", "date-time").
 //
 // Anything else (title, description, $schema, $id, ...) is read for
 // documentation but never affects validation.
@@ -96,6 +96,16 @@ function validateNode(schema, data, ctx, instancePath, errors) {
 
   if (schema.enum && !schema.enum.some(v => JSON.stringify(v) === JSON.stringify(data)))
     errors.push(`${label}: must be one of ${JSON.stringify(schema.enum)}, got ${JSON.stringify(data)}`)
+
+  if (schema.anyOf) {
+    const matchesAny = schema.anyOf.some((sub) => {
+      const subErrors = []
+      validateNode(sub, data, ctx, instancePath, subErrors)
+      return subErrors.length === 0
+    })
+    if (!matchesAny)
+      errors.push(`${label}: must match at least one schema in anyOf`)
+  }
 
   if (schema.type) {
     const types = Array.isArray(schema.type) ? schema.type : [schema.type]

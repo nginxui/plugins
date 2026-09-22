@@ -10,8 +10,11 @@ Before you submit, your plugin should have:
 
 - A public GitHub repository with at least one **GitHub Release** whose tag
   looks like `v1.0.0` (SemVer) and whose assets include the packaged
-  `.tar.gz` your plugin builds (see `nginx-ui-plugin-spec/spec/02-packaging.md`
-  in the main project for the archive layout).
+  `.tar.gz` your plugin builds: either the portable `<id>-<version>.tar.gz`,
+  or one `<id>-<version>-<goos>-<goarch>.tar.gz` per platform, or both (see
+  `nginx-ui-plugin-spec/spec/02-packaging.md` and
+  `spec/rfcs/0001-per-platform-packages.md` in the main project for the
+  archive layout).
 - A `plugin.json` that passes `nginx-ui plugin lint` and, for a plugin with a
   `server` block, `nginx-ui plugin conformance` — the same two commands
   `.github/workflows/validate.yml` runs against your release.
@@ -57,10 +60,12 @@ Required fields and what they mean are documented in
   see [Applying for verified trust](#applying-for-verified-trust) to request
   more.
 - `releases[]` starts with exactly one entry: your latest release. Leave
-  `sha256` and `signature_url` filled in with real values pointing at your
-  release assets; the workflow verifies them, it does not fill them in for
-  you (that auto-fill only happens for `official` entries, see
-  `docs/signing.md`).
+  `sha256`/`signature_url` (portable package) or each `downloads[<platform>]`
+  entry's `sha256`/`signature_url` filled in with real values pointing at
+  your release assets; the workflow verifies them, it does not fill them in
+  for you (that auto-fill only happens for `official` entries, see
+  `docs/signing.md`). A release needs at least one of `download_url` or
+  `downloads`; every key of `downloads` must also appear in `platforms`.
 - `author_public_key` is required when any release is `signed_by: "author"`
   (every `community` release, in practice).
 
@@ -80,13 +85,15 @@ entry:
 3. **Release fetch** — the workflow fetches your repository's latest GitHub
    Release and confirms it matches the `version` your entry's newest
    `releases[]` item declares.
-4. **Integrity** — downloads the release asset at `download_url` and its
-   `.minisig`, checks it against `sha256`, and verifies the signature with
-   `minisign` against `author_public_key` (community) or the catalog's
-   official key (official/verified).
+4. **Integrity** — downloads every package the entry lists (the portable
+   package at `download_url`, and/or each platform's package under
+   `downloads`) and its `.minisig`, checks each against its `sha256`, and
+   verifies the signature with `minisign` against `author_public_key`
+   (community) or the catalog's official key (official/verified).
 5. **Lint and conformance** — runs `nginx-ui plugin lint` and
-   `nginx-ui plugin conformance` against the downloaded package inside the
-   `uozicoder/nginx-ui` container image.
+   `nginx-ui plugin conformance` against the package a linux-amd64 host would
+   install (`downloads["linux-amd64"]`, `downloads["any"]`, or the portable
+   package, in that order) inside the `uozicoder/nginx-ui` container image.
 
 Steps 3–5 are skipped with a clear notice (not a failure) when a release
 asset is not published yet, so you can open a PR to reserve an id or get
