@@ -6,7 +6,7 @@
       "id": "com.nginxui.dns01",
       "name": {
         "en": "DNS-01 Challenge",
-        "zh_CN": "DNS-01 挑战"
+        "zh_CN": "DNS-01 验证"
       },
       "description": {
         "en": "Solve the ACME DNS-01 challenge with any of the 224 DNS providers supported by lego.",
