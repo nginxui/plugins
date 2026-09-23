@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { parseGithubRepoUrl, getLatestRelease, fetchRawFile, downloadBinary } from './github.mjs'
-import { platformsFromManifest, trimManifestSnapshot } from './manifest-snapshot.mjs'
+import { localizedTextFromManifest, platformsFromManifest, trimManifestSnapshot } from './manifest-snapshot.mjs'
 import { findPortableAsset, buildDownloadsMap } from './release-assets.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
@@ -118,10 +118,11 @@ async function main() {
     sha256 = createHash('sha256').update(bytes).digest('hex')
   }
 
+  const { name, description } = localizedTextFromManifest(manifest)
   const entry = {
     id: pluginId,
-    name: { en: manifest.name },
-    description: { en: manifest.description ?? '' },
+    name,
+    description,
     author: contact || repo.owner,
     ...(authorPublicKey ? { author_public_key: authorPublicKey } : {}),
     homepage_url: manifest.homepage_url || repositoryUrl,

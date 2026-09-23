@@ -55,7 +55,15 @@ Required fields and what they mean are documented in
 `schema/entry.schema.json`; in particular:
 
 - `name` and `description` are locale maps; `en` is required, additional
-  locales are welcome.
+  locales are welcome. They can come straight from your `plugin.json`: its
+  top level `name` and `description` are the `en` text, and its optional
+  `i18n` block (`nginx-ui-plugin-spec/spec/01-manifest.md` MAN-40, e.g.
+  `"i18n": { "zh_CN": { "name": "...", "description": "..." } }`) holds the
+  other locales. The release workflow may fill both maps from it: the Issue
+  form path does so for the entry it drafts, leaving out empty
+  translations, and the manifest snapshot at `releases[].manifest` keeps the
+  `i18n` block. `poll-releases.yml` only appends releases and never rewrites
+  the maps, so copy changed translations into your entry by hand.
 - `trust` for a first-time community submission is always `"community"` —
   see [Applying for verified trust](#applying-for-verified-trust) to request
   more.

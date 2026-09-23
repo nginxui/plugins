@@ -267,6 +267,25 @@
         "description": {
           "type": "string"
         },
+        "i18n": {
+          "type": "object",
+          "description": "Translations of name and description keyed by locale (spec MAN-40). The release workflow may fill the entry's name and description maps from it.",
+          "propertyNames": {
+            "$ref": "#/$defs/locale"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            }
+          }
+        },
         "api_version": {
           "type": "integer",
           "minimum": 1
