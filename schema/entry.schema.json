@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/0xJacky/nginx-ui-plugins/main/schema/entry.schema.json",
+  "$id": "https://plugins.nginxui.com/schema/entry.schema.json",
   "title": "Plugin Catalog Entry",
   "description": "One plugin as authored in plugins/<id>.json. Mirrors internal/plugin.CatalogEntry in nginx-ui, minus the fields the host computes at fetch time (source, installable_release, installed_version, update_available).",
   "type": "object",

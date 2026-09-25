@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/0xJacky/nginx-ui-plugins/main/schema/partner.schema.json",
+  "$id": "https://plugins.nginxui.com/schema/partner.schema.json",
   "title": "Partner",
   "description": "One partner organization as authored in partners/<name>.json. scripts/build-partners.mjs assembles these files into v1/partners.json, the signed partner keyring. See docs/signing.md.",
   "type": "object",

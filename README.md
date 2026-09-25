@@ -40,8 +40,15 @@ The default source, baked into every nginx-ui build
 index:
 
 ```
-https://raw.githubusercontent.com/0xJacky/nginx-ui-plugins/main/v1/index.json
+https://plugins.nginxui.com/v1/index.json
 ```
+
+The address is this repository served by GitHub Pages from the root of the
+`main` branch (`CNAME` names the domain, `.nojekyll` keeps every file as it
+is), so `v1/index.json`, `v1/partners.json` with its signature, and the
+schemas under `schema/` are plain files behind a CDN and need no server of
+their own. The packages themselves stay on the GitHub Releases of each
+plugin repository.
 
 `v1/index.json` is a `CatalogDocument`:
 
