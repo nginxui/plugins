@@ -3,11 +3,12 @@
 // dependency on ajv or any other package so `node scripts/validate.mjs` runs
 // with nothing but a Node.js installation.
 //
-// Supported keywords: type, const, enum, anyOf, $ref (local "#/$defs/..."
-// and a relative sibling schema file), properties, required,
+// Supported keywords: type, const, enum, anyOf, $ref (local "#/$defs/...",
+// a relative sibling schema file, or a pointer into one such as
+// "partner.schema.json#/$defs/name"), properties, required,
 // additionalProperties (boolean or schema), propertyNames, minProperties,
 // maxProperties, items, minItems, maxItems, uniqueItems, minLength,
-// maxLength, pattern, minimum, maximum, format ("uri", "date-time").
+// maxLength, pattern, minimum, maximum, format ("uri", "date-time", "date").
 //
 // Anything else (title, description, $schema, $id, ...) is read for
 // documentation but never affects validation.
@@ -16,6 +17,17 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 
 const DATE_TIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/
+const DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/
+
+/** Whether text is a calendar date in YYYY-MM-DD form (RFC 3339 full-date). */
+export function isDate(text) {
+  const match = DATE_PATTERN.exec(text)
+  if (!match)
+    return false
+  const [year, month, day] = match.slice(1).map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day))
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+}
 
 /** Loads and parses a JSON file, throwing a readable error on bad JSON. */
 function loadJson(file) {
@@ -35,23 +47,31 @@ function makeContext(doc, dir, cache = new Map()) {
 }
 
 function resolveRef(ref, ctx) {
-  if (ref.startsWith('#/')) {
-    const parts = ref.slice(2).split('/').map(p => p.replace(/~1/g, '/').replace(/~0/g, '~'))
-    let node = ctx.doc
+  const hash = ref.indexOf('#')
+  const file = hash === -1 ? ref : ref.slice(0, hash)
+  const pointer = hash === -1 ? '' : ref.slice(hash + 1)
+
+  // A relative sibling schema file, e.g. "entry.schema.json".
+  let target = ctx
+  if (file) {
+    const full = path.resolve(ctx.dir, file)
+    if (!ctx.cache.has(full))
+      ctx.cache.set(full, loadJson(full))
+    target = makeContext(ctx.cache.get(full), path.dirname(full), ctx.cache)
+  }
+
+  let node = target.doc
+  if (pointer) {
+    if (!pointer.startsWith('/'))
+      throw new Error(`cannot resolve $ref ${ref}: only JSON pointer fragments are supported`)
+    const parts = pointer.slice(1).split('/').map(p => p.replace(/~1/g, '/').replace(/~0/g, '~'))
     for (const part of parts) {
       if (node == null || !(part in node))
         throw new Error(`cannot resolve $ref ${ref}: no ${part}`)
       node = node[part]
     }
-    return { schema: node, ctx }
   }
-
-  // A relative sibling schema file, e.g. "entry.schema.json".
-  const file = path.resolve(ctx.dir, ref)
-  if (!ctx.cache.has(file))
-    ctx.cache.set(file, loadJson(file))
-  const doc = ctx.cache.get(file)
-  return { schema: doc, ctx: makeContext(doc, path.dirname(file), ctx.cache) }
+  return { schema: node, ctx: target }
 }
 
 function typeOf(value) {
@@ -134,6 +154,8 @@ function validateNode(schema, data, ctx, instancePath, errors) {
     }
     if (schema.format === 'date-time' && !DATE_TIME_PATTERN.test(data))
       errors.push(`${label}: must be an RFC 3339 date-time, got ${JSON.stringify(data)}`)
+    if (schema.format === 'date' && !isDate(data))
+      errors.push(`${label}: must be a YYYY-MM-DD date, got ${JSON.stringify(data)}`)
   }
 
   if (type === 'number' || type === 'integer') {

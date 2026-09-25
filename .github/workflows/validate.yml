@@ -9,6 +9,7 @@ on:
   pull_request:
     paths:
       - "plugins/**"
+      - "partners/**"
       - "schema/**"
       - "scripts/**"
       - "codes.json"
@@ -37,6 +38,9 @@ jobs:
 
       - name: node scripts/build-index.mjs --check
         run: node scripts/build-index.mjs --check
+
+      - name: node scripts/build-partners.mjs --check
+        run: node scripts/build-partners.mjs --check
 
       - id: changed
         name: List plugin entries this PR touches
@@ -87,9 +91,15 @@ jobs:
       # fail on a regular file plugin.sums does not list, run
       # `sha256sum -c plugin.sums`, and for a community entry run
       # `minisign -Vm plugin.sums -x plugin.sums.minisig -P <author_public_key>`.
-      # nginx-ui pins the official and partner keys itself, so official and
-      # verified entries skip only that last key check.
+      # A verified entry is checked against its partner certificate
+      # (plugin.partner, plugin.partner.minisig) or, without one, against
+      # partners/. The certificate signature check needs the release public
+      # key in the PLUGIN_SIGNING_PUBLIC_KEY repository variable and reports
+      # SKIP without it. nginx-ui pins the release key itself, so official
+      # entries skip only that last key check.
       - name: Verify sha256, plugin.sums and signature for each changed entry
+        env:
+          PLUGIN_SIGNING_PUBLIC_KEY: ${{ vars.PLUGIN_SIGNING_PUBLIC_KEY }}
         run: |
           set -e
           while IFS= read -r file; do

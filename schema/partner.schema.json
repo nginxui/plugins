@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/0xJacky/nginx-ui-plugins/main/schema/partner.schema.json",
+  "title": "Partner",
+  "description": "One partner organization as authored in partners/<name>.json. scripts/build-partners.mjs assembles these files into v1/partners.json, the signed partner keyring. See docs/signing.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "public_key"
+  ],
+  "properties": {
+    "name": {
+      "$ref": "#/$defs/name"
+    },
+    "public_key": {
+      "$ref": "#/$defs/publicKeyText",
+      "description": "The partner's minisign public key, whole or as its single key line. Packages whose plugin.sums it signs install as verified."
+    },
+    "expires": {
+      "$ref": "#/$defs/date",
+      "description": "Last day hosts treat the key as a partner key through the keyring. Optional."
+    },
+    "revoked": {
+      "type": "boolean",
+      "description": "true removes the partner from the keyring and lists its key id under revoked, which ends partner trust for that key on every host, certificate or not."
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "description": "Why the key was revoked. Required when revoked is true, and only used then."
+    }
+  },
+  "$defs": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+([.-][a-z0-9]+)*$",
+      "maxLength": 64,
+      "description": "Partner id: the file name without .json, and the <name> in a partner certificate's trusted comment partner:<name>;expires:<YYYY-MM-DD>."
+    },
+    "publicKeyText": {
+      "type": "string",
+      "pattern": "^(untrusted comment: [^\\n]*\\n)?RW[A-Za-z0-9+/]{54}\\n?$",
+      "description": "A minisign public key in text form, with or without its untrusted comment line."
+    },
+    "publicKeyLine": {
+      "type": "string",
+      "pattern": "^RW[A-Za-z0-9+/]{54}$",
+      "description": "The base64 key line of a minisign public key."
+    },
+    "keyId": {
+      "type": "string",
+      "pattern": "^[0-9A-F]{16}$",
+      "description": "A minisign key id as minisign prints it: bytes 2..10 of the decoded key line, little endian, 16 upper case hex digits."
+    },
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "A YYYY-MM-DD calendar date."
+    }
+  }
+}

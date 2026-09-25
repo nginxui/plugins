@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 // Validates the whole catalog: every plugins/<id>.json against
 // schema/entry.schema.json, v1/index.json against schema/catalog.schema.json,
-// plus the structural rules a JSON Schema alone cannot express (id
-// uniqueness, provider code registration, an author key on every community
-// entry, and that v1/index.json is actually up to date with plugins/*.json).
+// every partners/<name>.json against schema/partner.schema.json,
+// v1/partners.json against schema/partners.schema.json, plus the structural
+// rules a JSON Schema alone cannot express (id uniqueness, provider code
+// registration, an author key on every community entry, unique partner keys,
+// a reason on every revocation, and that v1/index.json and v1/partners.json
+// are actually up to date with their sources).
 //
 // Usage: node scripts/validate.mjs
 //
@@ -13,14 +16,20 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { validateAgainstSchemaFile } from './lib/schema-validator.mjs'
+import { parsePublicKey } from './lib/minisign.mjs'
 import { buildIndex } from './build-index.mjs'
+import { buildKeyring } from './build-partners.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const PLUGINS_DIR = path.join(ROOT, 'plugins')
 const CODES_PATH = path.join(ROOT, 'codes.json')
 const INDEX_PATH = path.join(ROOT, 'v1', 'index.json')
+const PARTNERS_DIR = path.join(ROOT, 'partners')
+const KEYRING_PATH = path.join(ROOT, 'v1', 'partners.json')
 const ENTRY_SCHEMA = path.join(ROOT, 'schema', 'entry.schema.json')
 const CATALOG_SCHEMA = path.join(ROOT, 'schema', 'catalog.schema.json')
+const PARTNER_SCHEMA = path.join(ROOT, 'schema', 'partner.schema.json')
+const KEYRING_SCHEMA = path.join(ROOT, 'schema', 'partners.schema.json')
 
 const PROVIDER_CODE_PATTERN = /^[a-z0-9-]{2,32}$/
 const PLATFORM_KEY_PATTERN = /^([a-z0-9]+-[a-z0-9]+|any)$/
@@ -121,7 +130,8 @@ function checkNamingPolicy(entries) {
 
 /** A community package signs its plugin.sums with the author's own key, and
  * the host only trusts that key through the entry's author_public_key. The
- * keys behind official and verified packages are pinned by the host itself. */
+ * release key behind official packages is pinned by the host, and a
+ * verified package relies on a partner certificate or on v1/partners.json. */
 function checkAuthorKeys(entries) {
   for (const [file, entry] of entries) {
     if (entry.trust === 'community' && !entry.author_public_key)
@@ -221,6 +231,109 @@ function checkIndex() {
     ok('v1/index.json is up to date with plugins/*.json')
 }
 
+/** Schema-validates every partners/<name>.json and checks what the schema
+ * cannot: the file name, a parsable key used by one partner only, and a
+ * reason exactly when the partner is revoked. */
+function validatePartners() {
+  if (!existsSync(PARTNERS_DIR)) {
+    ok('no partners/ directory, the partner keyring is empty')
+    return
+  }
+
+  const files = readdirSync(PARTNERS_DIR).filter(f => f.endsWith('.json')).sort()
+  const fileByKeyId = new Map()
+  let validCount = 0
+
+  for (const file of files) {
+    const where = `partners/${file}`
+    let data
+    try {
+      data = loadJson(path.join(PARTNERS_DIR, file))
+    }
+    catch (err) {
+      fail(where, `invalid JSON: ${err.message}`)
+      continue
+    }
+
+    const schemaErrors = validateAgainstSchemaFile(PARTNER_SCHEMA, data)
+    if (schemaErrors.length > 0) {
+      for (const e of schemaErrors)
+        fail(where, e)
+      continue
+    }
+
+    let valid = true
+    if (`${data.name}.json` !== file) {
+      fail(where, `"name" is ${JSON.stringify(data.name)}, expected the file to be named ${data.name}.json`)
+      valid = false
+    }
+    if (data.revoked === true && !data.reason) {
+      fail(where, 'revoked is true but there is no reason')
+      valid = false
+    }
+    if (data.revoked !== true && data.reason) {
+      fail(where, 'has a reason but revoked is not true')
+      valid = false
+    }
+
+    try {
+      const { id } = parsePublicKey(data.public_key)
+      if (fileByKeyId.has(id)) {
+        fail(where, `key ${id} is already listed in partners/${fileByKeyId.get(id)}`)
+        valid = false
+      }
+      else {
+        fileByKeyId.set(id, file)
+      }
+    }
+    catch (err) {
+      fail(where, `public_key: ${err.message}`)
+      valid = false
+    }
+
+    if (valid)
+      validCount += 1
+  }
+
+  if (validCount === files.length)
+    ok(`${files.length} partner file(s) match schema/partner.schema.json with unique keys`)
+}
+
+function checkKeyring() {
+  if (!existsSync(KEYRING_PATH)) {
+    fail('v1/partners.json', 'file is missing, run: node scripts/build-partners.mjs')
+    return
+  }
+
+  let data
+  try {
+    data = loadJson(KEYRING_PATH)
+  }
+  catch (err) {
+    fail('v1/partners.json', `invalid JSON: ${err.message}`)
+    return
+  }
+
+  const schemaErrors = validateAgainstSchemaFile(KEYRING_SCHEMA, data)
+  for (const e of schemaErrors)
+    fail('v1/partners.json', e)
+  if (schemaErrors.length === 0)
+    ok('v1/partners.json matches schema/partners.schema.json')
+
+  let expected
+  try {
+    expected = JSON.stringify(buildKeyring())
+  }
+  catch (err) {
+    fail('v1/partners.json', `cannot be built: ${err.message}`)
+    return
+  }
+  if (expected !== JSON.stringify(data))
+    fail('v1/partners.json', 'is not up to date with partners/*.json, run: node scripts/build-partners.mjs')
+  else
+    ok('v1/partners.json is up to date with partners/*.json')
+}
+
 function main() {
   console.log(`nginx-ui-plugins validate (node ${process.version})\n`)
 
@@ -231,6 +344,8 @@ function main() {
   checkDownloadsPlatforms(entries)
   checkProviderCodes(entries)
   checkIndex()
+  validatePartners()
+  checkKeyring()
 
   console.log()
   if (errorCount > 0) {

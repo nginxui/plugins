@@ -122,7 +122,7 @@
         "verified",
         "community"
       ],
-      "description": "Trust level the entry claims. official: published by the nginx-ui project. verified: published by a partner organization whose key the project pins, with no claim about source review. community: signed by the author with author_public_key. The host derives the effective level from the key that signed plugin.sums inside the package."
+      "description": "Trust level the entry claims. official: published by the nginx-ui project. verified: published by a partner organization the maintainers vouch for, with a partner certificate in the package or a listing in the partner keyring (v1/partners.json), with no claim about source review. community: signed by the author with author_public_key. The host derives the effective level from the key that signed plugin.sums inside the package."
     },
     "stage": {
       "type": "string",

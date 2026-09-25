@@ -101,8 +101,10 @@ entry:
    `sha256sum -c plugin.sums` must pass. For a `community` entry the workflow
    then runs
    `minisign -Vm plugin.sums -x plugin.sums.minisig -P <author_public_key>`.
-   nginx-ui pins the official and partner keys itself, so `official` and
-   `verified` entries skip only that key check.
+   For a `verified` entry it checks the partner certificate instead (see
+   [Partner plugins](#partner-plugins)), or, for a package without one, that
+   `plugin.sums.minisig` is signed by a key in `partners/`. nginx-ui pins the
+   release key itself, so `official` entries skip only that key check.
 5. **Lint and conformance** — runs `nginx-ui plugin lint` and
    `nginx-ui plugin conformance` against the package a linux-amd64 host would
    install (`downloads["linux-amd64"]`, `downloads["any"]`, or the portable
@@ -145,12 +147,32 @@ plugin id (see `nginx-ui-plugin-spec/spec/11-naming.md` NAME-4..NAME-6).
 
 ## Partner plugins
 
-`verified` trust is reserved for partner organizations. It says who
-published a package and makes no claim that anyone reviewed its source. A
-partner contacts the nginx-ui maintainers, and once agreed, its minisign
-public key is pinned in an nginx-ui release. The partner keeps signing
-`plugin.sums` in its own packages, and hosts running that release or a later
-one install them as `verified`.
+`verified` trust is reserved for partner organizations the maintainers
+vouch for. It says who published a package and makes no claim that anyone
+reviewed its source.
+
+1. The partner contacts the nginx-ui maintainers. Once agreed, it generates
+   a minisign key pair (`minisign -G -p partner.pub -s partner.key`) and
+   sends only its public key, `partner.pub`.
+2. The maintainers add `partners/<name>.json` with that key, which lists it
+   in the signed partner keyring `v1/partners.json`, and send back a
+   partner certificate: `plugin.partner` (the partner's public key) and
+   `plugin.partner.minisig` (a release key signature over it that names the
+   partner and an expiry date). See "Issuing a partner certificate" in
+   `docs/signing.md`.
+3. The partner puts both files, unchanged, at the root of every package
+   before writing `plugin.sums`, so `plugin.sums` lists them like any other
+   file, and signs `plugin.sums` with its own key as usual.
+4. Its catalog entries use `"trust": "verified"` and need no
+   `author_public_key`.
+
+Hosts install such a package as `verified` when the certificate verifies
+against the release key they pin, or when their copy of the keyring lists
+the key. No nginx-ui release is involved. A certificate stops working after
+its expiry date, so ask the maintainers for a new one before then. If the
+key may have leaked, tell the maintainers through a private security
+advisory: they revoke it in `partners/`, and hosts stop treating it as a
+partner key on their next catalog refresh, certificate or not.
 
 ## Yank procedure
 

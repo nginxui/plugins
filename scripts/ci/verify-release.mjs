@@ -9,13 +9,22 @@
 // 2. Every regular file other than those two is listed in plugin.sums, and
 //    `sha256sum -c plugin.sums` passes.
 // 3. For a community entry, `minisign -Vm plugin.sums -x plugin.sums.minisig
-//    -P <author_public_key>` passes. nginx-ui pins the official and partner
-//    keys itself, so official and verified entries skip this key check here.
+//    -P <author_public_key>` passes. nginx-ui pins the release key itself, so
+//    official entries skip this key check here.
+// 4. For a verified entry carrying a partner certificate (plugin.partner and
+//    plugin.partner.minisig at its root): plugin.sums lists both files, the
+//    trusted comment reads partner:<name>;expires:<YYYY-MM-DD> and has not
+//    expired, the certified key is not revoked in partners/, the certificate
+//    verifies against the release key in PLUGIN_SIGNING_PUBLIC_KEY (SKIP when
+//    that variable is empty), and plugin.sums.minisig is signed by the
+//    certified key. Without a certificate, plugin.sums.minisig must be signed
+//    by a key listed in partners/ that is neither revoked nor expired.
 //
 // tar, sha256sum and minisign must be on PATH (.github/workflows/validate.yml
-// installs minisign).
+// installs minisign). Partner signatures are checked with node:crypto.
 //
-// Usage: node scripts/ci/verify-release.mjs <plugins/id.json>
+// Usage: [PLUGIN_SIGNING_PUBLIC_KEY=<release public key>] \
+//          node scripts/ci/verify-release.mjs <plugins/id.json>
 //
 // Exits 0 both when everything verifies and when a package was skipped for a
 // documented reason (its asset is not published yet). Exits 1 only for an
@@ -27,10 +36,16 @@ import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
+import { loadPartners } from '../build-partners.mjs'
+import { parsePublicKey, parseSignature, publicKeyLine, verifySignature } from '../lib/minisign.mjs'
+import { isDate } from '../lib/schema-validator.mjs'
 
 const SUMS = 'plugin.sums'
 const SIGNATURE = 'plugin.sums.minisig'
+const PARTNER = 'plugin.partner'
+const PARTNER_SIGNATURE = 'plugin.partner.minisig'
 const SUMS_LINE = /^([0-9a-f]{64}) {2}(.+)$/
+const CERTIFICATE_COMMENT = /^partner:([^;]+);expires:(\S+)$/
 
 function log(status, message) {
   console.log(`${status} ${message}`)
@@ -62,15 +77,6 @@ function run(command, args, cwd) {
     const output = `${err.stdout?.toString() ?? ''}${err.stderr?.toString() ?? ''}`.trim()
     return { ok: false, output: output || err.message }
   }
-}
-
-/** The base64 line of a minisign public key, given with or without its
- * "untrusted comment:" line. */
-function publicKeyLine(text) {
-  return text.split(/\r?\n/)
-    .map(line => line.trim())
-    .filter(line => line && !line.startsWith('untrusted comment:'))
-    .at(-1) ?? ''
 }
 
 /** Slash separated paths of every regular file under root. */
@@ -117,6 +123,148 @@ function parseSums(text) {
   return { paths }
 }
 
+function isRegularFile(dir, name) {
+  const full = path.join(dir, name)
+  return existsSync(full) && lstatSync(full).isFile()
+}
+
+/** Today as YYYY-MM-DD in UTC. An expiry date is valid through that day. */
+function today() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+/**
+ * Checks how a verified package earns partner trust, see the module comment
+ * (step 4). `listed` is the set of paths plugin.sums lists. Returns false on
+ * failure.
+ */
+function verifyPartner(label, dir, listed) {
+  let partners
+  try {
+    partners = loadPartners()
+  }
+  catch (err) {
+    log('FAIL', `${label}: cannot read partners/: ${err.message}`)
+    return false
+  }
+
+  const sums = readFileSync(path.join(dir, SUMS))
+  const sumsSignature = readFileSync(path.join(dir, SIGNATURE), 'utf8')
+  const hasKey = isRegularFile(dir, PARTNER)
+  const hasCertificate = isRegularFile(dir, PARTNER_SIGNATURE)
+
+  if (!hasKey && !hasCertificate) {
+    let signerId
+    try {
+      signerId = parseSignature(sumsSignature).keyId
+    }
+    catch (err) {
+      log('FAIL', `${label}: ${SIGNATURE}: ${err.message}`)
+      return false
+    }
+    const match = partners.find(({ key }) => key.id === signerId)
+    if (!match) {
+      log('FAIL', `${label}: no partner certificate (${PARTNER}, ${PARTNER_SIGNATURE}), and ${SIGNATURE} is signed by key ${signerId}, which is not in partners/`)
+      return false
+    }
+    if (match.partner.revoked === true) {
+      log('FAIL', `${label}: ${SIGNATURE} is signed by key ${signerId}, revoked in partners/${match.file}`)
+      return false
+    }
+    if (match.partner.expires && match.partner.expires < today()) {
+      log('FAIL', `${label}: ${SIGNATURE} is signed by key ${signerId}, which expired on ${match.partner.expires} in partners/${match.file}`)
+      return false
+    }
+    try {
+      verifySignature(match.key.line, sums, sumsSignature)
+    }
+    catch (err) {
+      log('FAIL', `${label}: ${SIGNATURE} does not verify against partners/${match.file}: ${err.message}`)
+      return false
+    }
+    log('OK', `${label}: no partner certificate, ${SIGNATURE} verifies against partners/${match.file} (key ${signerId})`)
+    return true
+  }
+
+  if (!hasKey || !hasCertificate) {
+    log('FAIL', `${label}: ${hasKey ? PARTNER_SIGNATURE : PARTNER} is missing, a partner certificate needs both ${PARTNER} and ${PARTNER_SIGNATURE} at the package root`)
+    return false
+  }
+  if (!listed.has(PARTNER) || !listed.has(PARTNER_SIGNATURE)) {
+    log('FAIL', `${label}: ${SUMS} must list both ${PARTNER} and ${PARTNER_SIGNATURE}`)
+    return false
+  }
+  log('OK', `${label}: ${SUMS} lists ${PARTNER} and ${PARTNER_SIGNATURE}`)
+
+  const partnerBytes = readFileSync(path.join(dir, PARTNER))
+  const certificateText = readFileSync(path.join(dir, PARTNER_SIGNATURE), 'utf8')
+  let partnerKey
+  let certificate
+  try {
+    partnerKey = parsePublicKey(partnerBytes.toString('utf8'))
+  }
+  catch (err) {
+    log('FAIL', `${label}: ${PARTNER} is not a minisign public key: ${err.message}`)
+    return false
+  }
+  try {
+    certificate = parseSignature(certificateText)
+  }
+  catch (err) {
+    log('FAIL', `${label}: ${PARTNER_SIGNATURE}: ${err.message}`)
+    return false
+  }
+
+  const comment = certificate.trustedComment.match(CERTIFICATE_COMMENT)
+  if (!comment || !isDate(comment[2])) {
+    log('FAIL', `${label}: ${PARTNER_SIGNATURE} trusted comment ${JSON.stringify(certificate.trustedComment)} is not partner:<name>;expires:<YYYY-MM-DD>`)
+    return false
+  }
+  const [, name, expires] = comment
+  const certified = `certificate for ${JSON.stringify(name)} (key ${partnerKey.id}, expires ${expires})`
+  if (expires < today()) {
+    log('FAIL', `${label}: ${certified} has expired`)
+    return false
+  }
+  const revokedBy = partners.find(({ partner, key }) => partner.revoked === true && key.id === partnerKey.id)
+  if (revokedBy) {
+    log('FAIL', `${label}: ${certified} names a key revoked in partners/${revokedBy.file}`)
+    return false
+  }
+
+  const releaseKey = (process.env.PLUGIN_SIGNING_PUBLIC_KEY ?? '').trim()
+  if (!releaseKey) {
+    log('SKIP', `${label}: ${certified} signature check, PLUGIN_SIGNING_PUBLIC_KEY is not set`)
+  }
+  else {
+    try {
+      parsePublicKey(releaseKey)
+    }
+    catch (err) {
+      log('FAIL', `${label}: PLUGIN_SIGNING_PUBLIC_KEY: ${err.message}`)
+      return false
+    }
+    try {
+      verifySignature(releaseKey, partnerBytes, certificateText)
+    }
+    catch (err) {
+      log('FAIL', `${label}: ${certified} does not verify against the release key: ${err.message}`)
+      return false
+    }
+    log('OK', `${label}: ${certified} verifies against the release key`)
+  }
+
+  try {
+    verifySignature(partnerKey.line, sums, sumsSignature)
+  }
+  catch (err) {
+    log('FAIL', `${label}: ${SIGNATURE} is not signed by the key in ${PARTNER}: ${err.message}`)
+    return false
+  }
+  log('OK', `${label}: ${SIGNATURE} verifies against the certified partner key ${partnerKey.id}`)
+  return true
+}
+
 /** Checks one extracted package's signature files. Returns false on failure. */
 function verifyContents(entry, label, dir) {
   for (const name of [SUMS, SIGNATURE]) {
@@ -145,6 +293,9 @@ function verifyContents(entry, label, dir) {
     return false
   }
   log('OK', `${label}: ${SUMS} covers all ${sums.paths.length} files and every digest matches`)
+
+  if (entry.trust === 'verified')
+    return verifyPartner(label, dir, listed)
 
   if (entry.trust !== 'community') {
     log('SKIP', `${label}: ${entry.trust} key check, nginx-ui pins that key itself`)
