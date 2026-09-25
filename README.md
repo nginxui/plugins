@@ -43,12 +43,13 @@ index:
 https://plugins.nginxui.com/v1/index.json
 ```
 
-The address is this repository served by GitHub Pages from the root of the
-`main` branch (`CNAME` names the domain, `.nojekyll` keeps every file as it
-is), so `v1/index.json`, `v1/partners.json` with its signature, and the
-schemas under `schema/` are plain files behind a CDN and need no server of
-their own. The packages themselves stay on the GitHub Releases of each
-plugin repository.
+The address is this repository served by Cloudflare Pages straight from the
+root of the `main` branch, with no build step: `v1/index.json`,
+`v1/partners.json` with its signature, and the schemas under `schema/` are
+plain files behind the CDN and need no server of their own. `_headers` sets
+the cache lifetime (five minutes for `v1/`, so a revocation reaches hosts
+quickly) and the content types. The packages themselves stay on the GitHub
+Releases of each plugin repository.
 
 `v1/index.json` is a `CatalogDocument`:
 

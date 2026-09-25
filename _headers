@@ -1,0 +1,10 @@
+# Cloudflare Pages headers. The catalog and the keyring are polled by hosts,
+# a short cache keeps revocations moving; schemas change with releases only.
+/v1/*
+  Cache-Control: public, max-age=300
+  X-Content-Type-Options: nosniff
+/v1/*.minisig
+  Content-Type: text/plain; charset=utf-8
+/schema/*
+  Cache-Control: public, max-age=86400
+  Content-Type: application/schema+json; charset=utf-8
