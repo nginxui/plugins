@@ -56,7 +56,6 @@
           "url": "https://github.com/0xJacky/nginx-ui-plugin-dns01/releases/download/v1.0.0/com.nginxui.dns01-1.0.0-windows-arm64.tar.gz"
         }
       },
-      "signed_by": "official",
       "release_notes_url": "https://github.com/0xJacky/nginx-ui-plugin-dns01/releases/tag/v1.0.0",
       "manifest": {
         "id": "com.nginxui.dns01",

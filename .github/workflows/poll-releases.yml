@@ -50,9 +50,6 @@ jobs:
             not modify any existing release entry.
 
             Before merging, `validate.yml` will verify each new release's
-            `sha256` and signature as usual. Please still skim the diff —
-            in particular, a plugin whose `signed_by` is `"author"` needs no
-            further action here, but a `"verified"` plugin's new release
-            still needs the catalog's own signing step (see
-            `docs/signing.md`) before it will pass signature verification.
+            `sha256` and the `plugin.sums` signature inside every package as
+            usual. Please still skim the diff.
           labels: automated-pr

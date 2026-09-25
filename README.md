@@ -19,7 +19,7 @@ schema/               JSON Schema (draft 2020-12) for both file shapes.
 scripts/              No-dependency Node.js scripts: build, validate, and the
                        small pieces of automation the GitHub Actions in
                        .github/workflows/ call into.
-docs/signing.md        The minisign signing procedure for official releases.
+docs/signing.md        How plugin packages are signed with minisign.
 ```
 
 ## How nginx-ui hosts consume this
@@ -59,9 +59,10 @@ installing the selected package, the host:
 
 1. Downloads its `url` (`download_url` for the portable package) and checks
    it against its `sha256`.
-2. Verifies the detached signature at its `signature_url` (or the package
-   `url + ".minisig"` when `signature_url` is absent) against a trusted
-   minisign key — see [Trust levels](#trust-levels) and `docs/signing.md`.
+2. Checks every file of the package against the `plugin.sums` list at its
+   root, verifies the `plugin.sums.minisig` signature over that list, and
+   derives the trust level from the key that made it. See
+   [Trust levels](#trust-levels) and `docs/signing.md`.
 3. Confirms the downloaded package's own `plugin.json` reports the same `id`
    and `version` the catalog promised, so a compromised mirror cannot swap a
    well-known id for something else.
@@ -74,21 +75,28 @@ A node is not limited to this catalog. In nginx-ui, go to **Plugins →
 Marketplace → Sources** (backed by `GET/POST /plugins/marketplace/sources`)
 and add another `index.json` URL — for example a private catalog for
 internally built plugins. Sources are merged in the order listed; the first
-source that lists a given plugin `id` wins. A community or self-hosted source
-generally needs `plugin.require_signature` relaxed or its packages signed
-with a key added to `plugin.trusted_public_keys`, since only the official
-source at the default URL is always required to be signed. Relaxing
-`plugin.require_signature` also caps every entry of a custom source at
-`community`, whatever `trust` it claims: a trust level is only honoured when
-the packages behind it are held to the signature policy.
+source that lists a given plugin `id` wins. A custom source may list any
+trust level, but the host still derives the effective trust from the package
+signature, whatever `trust` the entry claims. A package is `official` only
+when the project's release key signed it, `verified` only when a partner key
+pinned by the project signed it, and `community` only when it verifies
+against the `author_public_key` of its entry or against a key the operator
+added to the host's trusted key list (`plugin.trusted_public_keys`). Anything
+else is unsigned, and unsigned packages install only when developer mode is
+on.
 
 ## Trust levels
 
-| Trust | Meaning | Who signs the release |
+| Trust | Meaning | Key that signs `plugin.sums` |
 | --- | --- | --- |
-| `official` | Built and signed by the nginx-ui maintainers' own CI. Reserved for `com.nginxui.*` plugins. | The catalog's release-signing key, pinned in `internal/releasesign` and every nginx-ui binary. |
-| `verified` | Source reviewed by a maintainer, then built and signed by the catalog's CI on the author's behalf. | Same release-signing key as `official`. |
-| `community` | Published and signed by the author themselves. Not reviewed line by line; installing one requires `plugin.allow_community_plugins` and a user confirmation in the UI. | The author's own minisign key, published in the entry's `author_public_key`. |
+| `official` | Published by the nginx-ui project. Reserved for `com.nginxui.*` plugins. | The project's release key, pinned in every nginx-ui build (`internal/releasesign`). |
+| `verified` | Published by a partner organization whose key the project pins. It makes no claim that anyone reviewed the source. | The partner's own key, pinned in an nginx-ui release. |
+| `community` | Signed by the author. Not reviewed; installing one requires the community switch (`plugin.allow_community_plugins`) and a confirmation in the UI. | The author's own minisign key, published in the entry's `author_public_key`. |
+
+The host derives the level from the key that signed `plugin.sums` inside the
+package, not from the entry's `trust`. A package without `plugin.sums` and
+`plugin.sums.minisig`, or signed by a key none of the rows above match, is
+unsigned. Unsigned packages install only when developer mode is on.
 
 `stage` is independent of trust: `production` or `beta`, signaling how much
 real-world use a release has had, not who vetted it.
@@ -103,9 +111,10 @@ be broken or unsafe). In short:
 1. Open an Issue with the *Submit a plugin* form, or send a pull request that
    adds `plugins/<id>.json`.
 2. `.github/workflows/validate.yml` downloads your latest GitHub release,
-   checks the manifest, verifies the `sha256` and the `.minisig` signature
-   against your `author_public_key`, and runs `nginx-ui plugin lint` and
-   `nginx-ui plugin conformance` in a container.
+   checks the `sha256` of every package, the `plugin.sums` list inside it and
+   its `plugin.sums.minisig` signature against your `author_public_key`, and
+   runs `nginx-ui plugin lint` and `nginx-ui plugin conformance` in a
+   container.
 3. A maintainer reviews and merges. Your plugin is listed with `trust:
    "community"`.
 4. `.github/workflows/poll-releases.yml` checks registered repositories every
@@ -139,9 +148,9 @@ node scripts/build-index.mjs   # regenerate v1/index.json from plugins/*.json
 `scripts/validate.mjs` checks that every `plugins/<id>.json` matches
 `schema/entry.schema.json`, that `v1/index.json` matches
 `schema/catalog.schema.json` and is up to date with `plugins/*.json`, that
-plugin ids are unique, that the naming policy above holds, that a release's
-`signed_by` is consistent with its entry's `trust`, that every `downloads`
-key is a valid platform key listed in that release's `platforms`, and that
+plugin ids are unique, that the naming policy above holds, that every
+`community` entry has an `author_public_key`, that every `downloads` key is a
+valid platform key listed in that release's `platforms`, and that
 `codes.json` covers every `dns01` provider code a manifest snapshot declares.
 
 ## License

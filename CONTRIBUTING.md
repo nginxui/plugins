@@ -22,9 +22,10 @@ Before you submit, your plugin should have:
   (`io.github.<owner>.<name>` if you have no domain of your own). `id` must
   never start with `com.nginxui.`, which is reserved for plugins the
   nginx-ui project maintains itself.
-- If any release will be signed with your own key (required for `community`
-  trust, see below): a minisign key pair (`minisign -G`) and its `.minisig`
-  detached signature published alongside the release asset.
+- A minisign key pair (`minisign -G`), required for `community` trust. Every
+  package carries `plugin.sums` and its signature `plugin.sums.minisig` at
+  its root, see `docs/signing.md`. A package without them is unsigned and
+  installs only on a host in developer mode.
 
 ## Submission path 1: the Issue form
 
@@ -64,18 +65,17 @@ Required fields and what they mean are documented in
   translations, and the manifest snapshot at `releases[].manifest` keeps the
   `i18n` block. `poll-releases.yml` only appends releases and never rewrites
   the maps, so copy changed translations into your entry by hand.
-- `trust` for a first-time community submission is always `"community"` —
-  see [Applying for verified trust](#applying-for-verified-trust) to request
-  more.
-- `releases[]` starts with exactly one entry: your latest release. Leave
-  `sha256`/`signature_url` (portable package) or each `downloads[<platform>]`
-  entry's `sha256`/`signature_url` filled in with real values pointing at
-  your release assets; the workflow verifies them, it does not fill them in
-  for you (that auto-fill only happens for `official` entries, see
-  `docs/signing.md`). A release needs at least one of `download_url` or
-  `downloads`; every key of `downloads` must also appear in `platforms`.
-- `author_public_key` is required when any release is `signed_by: "author"`
-  (every `community` release, in practice).
+- `trust` for a submission is always `"community"`. `verified` is reserved
+  for partner organizations, see [Partner plugins](#partner-plugins).
+- `releases[]` starts with exactly one entry: your latest release. Fill in
+  `sha256` (portable package) or each `downloads[<platform>]` entry's
+  `sha256` with the digest of that archive, a download integrity check. The
+  workflow verifies them, it does not fill them in for you. The entry has no
+  signature field: the signature lives inside each package. A release needs
+  at least one of `download_url` or `downloads`; every key of `downloads`
+  must also appear in `platforms`.
+- `author_public_key` is required for a `community` entry. It is the minisign
+  public key that signs `plugin.sums` in your packages.
 
 ## What `.github/workflows/validate.yml` checks
 
@@ -84,8 +84,8 @@ entry:
 
 1. **Schema** — `node scripts/validate.mjs`: the entry matches
    `schema/entry.schema.json`, the file is named `<id>.json`, the id is
-   unique catalog-wide, `trust`/`signed_by` are consistent, and any `dns01`
-   provider code the manifest snapshot declares is registered in
+   unique catalog-wide, a `community` entry has an `author_public_key`, and
+   any `dns01` provider code the manifest snapshot declares is registered in
    `codes.json`.
 2. **Repository match** — the entry's `repository_url` must be a GitHub
    repository, and for an `io.github.<owner>.<name>` id, `<owner>` must
@@ -95,9 +95,14 @@ entry:
    `releases[]` item declares.
 4. **Integrity** — downloads every package the entry lists (the portable
    package at `download_url`, and/or each platform's package under
-   `downloads`) and its `.minisig`, checks each against its `sha256`, and
-   verifies the signature with `minisign` against `author_public_key`
-   (community) or the catalog's official key (official/verified).
+   `downloads`), checks each against its `sha256` and extracts it. Both
+   `plugin.sums` and `plugin.sums.minisig` must sit at the package root,
+   every regular file besides them must be listed in `plugin.sums`, and
+   `sha256sum -c plugin.sums` must pass. For a `community` entry the workflow
+   then runs
+   `minisign -Vm plugin.sums -x plugin.sums.minisig -P <author_public_key>`.
+   nginx-ui pins the official and partner keys itself, so `official` and
+   `verified` entries skip only that key check.
 5. **Lint and conformance** — runs `nginx-ui plugin lint` and
    `nginx-ui plugin conformance` against the package a linux-amd64 host would
    install (`downloads["linux-amd64"]`, `downloads["any"]`, or the portable
@@ -138,25 +143,14 @@ node scripts/generate-codes.mjs /path/to/your/plugin.json
 This fails loudly if a code you declare is already registered to a different
 plugin id (see `nginx-ui-plugin-spec/spec/11-naming.md` NAME-4..NAME-6).
 
-## Applying for verified trust
+## Partner plugins
 
-`verified` trust means a maintainer has reviewed your plugin's source rather
-than only its manifest and CI results, and your releases are then built and
-signed by the catalog's own CI on your behalf instead of your personal key.
-To apply:
-
-1. Have at least one `community` release already listed and used in
-   practice for a reasonable period.
-2. Open an Issue asking for a verified-trust review, linking your
-   repository and the specific commit/tag you want reviewed.
-3. A maintainer reviews the source (not just the diff of one release) and,
-   if it passes, opens the PR that flips `trust` to `"verified"` and moves
-   future releases to `signed_by: "official"`.
-
-Because the maintainers now sign your releases, `poll-releases.yml` stops
-being sufficient once you are `verified`: a maintainer needs to run the
-signing step (`docs/signing.md`) for each new release before its PR can be
-merged. Expect this to be slower than the fully automated `community` path.
+`verified` trust is reserved for partner organizations. It says who
+published a package and makes no claim that anyone reviewed its source. A
+partner contacts the nginx-ui maintainers, and once agreed, its minisign
+public key is pinned in an nginx-ui release. The partner keeps signing
+`plugin.sums` in its own packages, and hosts running that release or a later
+one install them as `verified`.
 
 ## Yank procedure
 

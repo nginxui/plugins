@@ -34,32 +34,21 @@ function newestRelease(entry) {
  */
 async function buildNewRelease(entry, ghRelease, manifest, token) {
   const version = ghRelease.tag_name.replace(/^v/, '')
-  const previous = newestRelease(entry)
-  const signedBy = previous?.signed_by ?? (entry.trust === 'community' ? 'author' : 'official')
-  // Official entries are signed by the catalog's own CI in a follow-up step
-  // (docs/signing.md); everyone else's package already carries the hash
-  // that matters, so compute it now rather than leaving the entry
-  // unverifiable.
-  const includeSha256 = entry.trust !== 'official'
-
+  // The signature travels inside each package (plugin.sums.minisig), so the
+  // entry only records the sha256 of every archive as a download check.
   const portableAsset = findPortableAsset(ghRelease.assets, entry.id, version)
-  const { downloads } = await buildDownloadsMap(ghRelease.assets, entry.id, version, { includeSha256, token })
+  const { downloads } = await buildDownloadsMap(ghRelease.assets, entry.id, version, { token })
 
   if (!portableAsset && Object.keys(downloads).length === 0) {
     console.warn(`  no ${entry.id}-${version}.tar.gz or per-platform package found on ${ghRelease.html_url}, skipping`)
     return null
   }
 
-  let downloadUrl, sha256, signatureUrl
+  let downloadUrl, sha256
   if (portableAsset) {
     downloadUrl = portableAsset.browser_download_url
-    const sigAsset = ghRelease.assets.find(a => a.name === `${portableAsset.name}.minisig`)
-    if (sigAsset)
-      signatureUrl = sigAsset.browser_download_url
-    if (includeSha256) {
-      const bytes = await downloadBinary(portableAsset.browser_download_url, token)
-      sha256 = createHash('sha256').update(bytes).digest('hex')
-    }
+    const bytes = await downloadBinary(portableAsset.browser_download_url, token)
+    sha256 = createHash('sha256').update(bytes).digest('hex')
   }
 
   return {
@@ -71,8 +60,6 @@ async function buildNewRelease(entry, ghRelease, manifest, token) {
     ...(Object.keys(downloads).length > 0 ? { downloads } : {}),
     ...(downloadUrl ? { download_url: downloadUrl } : {}),
     ...(sha256 ? { sha256 } : {}),
-    ...(signatureUrl ? { signature_url: signatureUrl } : {}),
-    signed_by: signedBy,
     release_notes_url: ghRelease.html_url,
     manifest: trimManifestSnapshot(manifest),
   }

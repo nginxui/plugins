@@ -65,40 +65,32 @@ async function fetchAssetText(url, token) {
 
 /**
  * Builds the "downloads" map (RFC 0001 PKG-14) for a release from its GitHub
- * assets: one entry per per-platform archive found, each with its "url" and,
- * when `includeSha256` is set, the digest read from the archive's small
- * ".sha256" sidecar asset — the same file the catalog's own docs (see
- * nginx-ui-plugin-dns01/README.md's Packaging section) describe as feeding
- * this map, rather than downloading every platform's (tens of MiB) archive
- * just to hash it here. `includeSha256` should be false for an "official"
- * entry, whose sha256 is filled in later by the release-signing step
- * (docs/signing.md), matching the existing behavior for the portable
- * package.
+ * assets: one entry per per-platform archive found, each with its "url" and
+ * the digest read from the archive's small ".sha256" sidecar asset. That is
+ * the file nginx-ui-plugin-dns01/README.md's Packaging section describes as
+ * feeding this map, so every platform's archive (tens of MiB) does not have
+ * to be downloaded just to hash it here. The package signature is not part
+ * of the map: it lives in plugin.sums.minisig inside each archive.
  *
  * Returns { downloads, platforms }; both are empty when no per-platform
  * asset is found (a webapp-only or interpreted plugin, or one that only
  * publishes the portable package).
  */
-export async function buildDownloadsMap(assets, id, version, { includeSha256, token }) {
+export async function buildDownloadsMap(assets, id, version, { token }) {
   const byPlatform = findPlatformAssets(assets, id, version)
   const platforms = [...byPlatform.keys()].sort()
   const downloads = {}
 
   for (const platform of platforms) {
     const asset = byPlatform.get(platform)
-    const download = { url: asset.browser_download_url }
+    const shaAsset = findSha256Asset(assets, asset)
+    if (!shaAsset)
+      throw new Error(`${asset.name}: release has no matching .sha256 asset`)
+    const digest = parseSha256Text(await fetchAssetText(shaAsset.browser_download_url, token))
+    if (!digest)
+      throw new Error(`${shaAsset.name}: could not parse a sha256 digest from its contents`)
 
-    if (includeSha256) {
-      const shaAsset = findSha256Asset(assets, asset)
-      if (!shaAsset)
-        throw new Error(`${asset.name}: release has no matching .sha256 asset`)
-      const digest = parseSha256Text(await fetchAssetText(shaAsset.browser_download_url, token))
-      if (!digest)
-        throw new Error(`${shaAsset.name}: could not parse a sha256 digest from its contents`)
-      download.sha256 = digest
-    }
-
-    downloads[platform] = download
+    downloads[platform] = { url: asset.browser_download_url, sha256: digest }
   }
 
   return { downloads, platforms }

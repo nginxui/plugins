@@ -1,120 +1,124 @@
 # Signing procedure
 
-Every `official` and `verified` release listed in this catalog is signed
-with one minisign key pair controlled by the catalog maintainers (the
-"production plugin signing key"). This key is separate from the key that
-signs nginx-ui's own core binaries (`internal/releasesign` in the main
-repository) — a plugin package and a core release are different trust
-domains and are verified independently by `internal/pkgsign`.
+A plugin package carries its signature inside the archive, as two files at
+the package root:
 
-This document does not itself contain the key. It was intentionally not
-generated as part of setting up this repository; the repository owner
-generates it out of band and stores only the public half here (in the
-knowledge of anyone reading this file) and the private half in GitHub
-Actions secrets.
+- `plugin.sums` lists every regular file of the package except these two,
+  one `<sha256>  <path>` line each: the lowercase hex digest, two spaces, and
+  the slash separated path relative to the package root, the layout
+  `sha256sum` writes. Lines are sorted bytewise by path (`LC_ALL=C sort`) and
+  end with LF. Directories are not listed.
+- `plugin.sums.minisig` is the minisign signature over `plugin.sums` in text
+  form, exactly what `minisign -S -m plugin.sums -x plugin.sums.minisig`
+  writes.
 
-## Generating the key (repository owner only, once)
+A package without both files is unsigned. A release publishes no `.minisig`
+file next to its archives, and a catalog entry has no signature field. The
+`sha256` of an entry is only a download integrity check.
 
-Run this on a machine you trust, not in CI:
+## Which key gives which trust level
+
+nginx-ui derives the trust level of a package from the key that signed its
+`plugin.sums`, whatever `trust` the catalog entry claims:
+
+| Key that signed `plugin.sums` | Trust |
+| --- | --- |
+| The nginx-ui project's release key, pinned in every build (`internal/releasesign`) | `official` |
+| A partner organization's key, pinned by the project in an nginx-ui release | `verified` |
+| The `author_public_key` of the catalog entry | `community` |
+| No signature, or a key none of the rows above match | unsigned |
+
+Unsigned packages install only when developer mode is on. `verified` makes
+no claim that anyone reviewed the source, see CONTRIBUTING.md's "Partner
+plugins".
+
+## Signing a package
+
+Stage the package directory exactly as it will be archived, then run this
+from its root:
+
+```sh
+find . -type f ! -path ./plugin.sums ! -path ./plugin.sums.minisig \
+  | sed 's|^\./||' | LC_ALL=C sort \
+  | while IFS= read -r file; do
+      printf '%s  %s\n' "$(sha256sum <"${file}" | cut -d ' ' -f 1)" "${file}"
+    done >plugin.sums
+
+minisign -S -m plugin.sums -x plugin.sums.minisig -s /path/to/plugin.key \
+  -t "<plugin id> <version>"
+```
+
+Archive the directory with `plugin.json` as the first entry and both files
+at the root. Running `sha256sum -c plugin.sums` inside an extracted package
+checks it. `build.sh` in nginx-ui-plugin-dns01 is a complete example: it
+writes `plugin.sums` for every platform package and signs it when
+`MINISIGN_KEY` names a minisign secret key file.
+
+Sign after every other change to the staged files. Any later edit, even to
+a documentation file, makes `sha256sum -c` fail on the host.
+
+## Community keys
+
+A community author generates a key pair on a machine they trust:
 
 ```sh
 minisign -G -p plugin.pub -s plugin.key
 ```
 
-You will be asked for a password protecting `plugin.key`. Do not skip it —
-treat `plugin.key` like any other production signing key: it is the one
-thing standing between a compromised CI runner and every user who trusts an
-`official` or `verified` plugin release.
+`plugin.pub` goes into the entry's `author_public_key`, either whole or as
+its single key line. `.github/workflows/validate.yml` verifies every
+package of a community entry against that key. When an author replaces the
+key, packages signed with the old one no longer match the entry and count
+as unsigned, so the author signs new releases with the new key and updates
+`author_public_key` in the same pull request that lists the first of them.
 
-`plugin.pub` looks like:
+## The project release key and partner keys
 
-```
-untrusted comment: minisign public key ...
-RW....................................
-```
+The key that makes a package `official` is the nginx-ui project's release
+key. A partner organization generates its own key pair the same way and
+sends the public half to the maintainers. This repository holds neither
+secret half and never signs anything: packages are signed where they are
+built, before their archive and its `sha256` exist.
 
-`plugin.key` (encrypted) looks like:
+minisign asks for the key password on every signature, once per package.
+A CI job that signs uses a key created without a password
+(`minisign -G -W`) or answers the prompt with an expect wrapper, and keeps
+the key in a secret of the repository that builds the plugin:
 
-```
-untrusted comment: minisign encrypted secret key
-RW....................................
-```
-
-## Storing the private key in GitHub Actions
-
-1. In this repository's settings, add two **Actions secrets** (Settings →
-   Secrets and variables → Actions):
-   - `PLUGIN_SIGNING_KEY` — the full contents of `plugin.key`.
-   - `PLUGIN_SIGNING_KEY_PASSWORD` — the password chosen above.
-2. `.github/workflows/validate.yml` and any future release-signing workflow
-   read these secrets to run `minisign -S` against a fetched release asset,
-   never to sign anything from an untrusted pull request context (a fork's
-   PR runs without secret access under GitHub's default `pull_request`
-   permissions; only workflows triggered from this repository's own context,
-   e.g. `pull_request_target` for a maintainer-approved run or a manual
-   `workflow_dispatch`, ever see these secrets).
-3. Never print `PLUGIN_SIGNING_KEY` or the password to a workflow log. Treat
-   a leaked private key the same as a compromised production credential:
-   rotate immediately (below) and yank every release signed after the
-   suspected leak that cannot be independently re-verified.
-
-## Pinning the public key in nginx-ui
-
-The public key half needs to be pinned in two independent places so a node
-can verify a package even if the catalog itself were compromised:
-
-1. **Compiled into the host** — `internal/releasesign` in the main
-   `nginx-ui` repository lists the trusted release-signing keys, and
-   `internal/pkgsign.Marketplace.trustedKeys` includes them for every
-   catalog source, official or not (`internal/plugin/marketplace.go`,
-   `trustedKeys`). Adding the production plugin signing key there requires a
-   PR to the main repository and ships with the next nginx-ui release —
-   coordinate this before the first `official` release depends on it.
-2. **Runtime setting** — an operator can additionally add a public key to
-   `plugin.trusted_public_keys` (`settings.PluginSettings.TrustedPublicKeys`)
-   without upgrading nginx-ui, which is how a self-hosted or `community`
-   source's key gets trusted, and how a new production key can be rolled out
-   ahead of the next release during rotation (see below).
-
-A release's own `signed_by` field records which of these key sets applies:
-`"official"` means the catalog's production key (compiled in, or the
-setting above); `"author"` means the entry's own `author_public_key`, only
-accepted when that entry's `trust` is `"community"`.
+1. Write the secret to a file inside the job and point the build at it,
+   e.g. `MINISIGN_KEY` for nginx-ui-plugin-dns01's `build.sh`. Delete the
+   file when the job ends.
+2. Sign only from a trusted context such as a tag push or a manual
+   `workflow_dispatch`, never from a pull request of a fork.
+3. Never print the key to a workflow log. Treat a leaked key like any
+   compromised production credential: rotate it (below) and yank every
+   release signed after the suspected leak that cannot be independently
+   re-verified.
 
 ## Rotation procedure
 
-Rotate the production plugin signing key if it may have been exposed, on a
-routine schedule the maintainers set, or when moving signing to new
-infrastructure (e.g. a new CI runner identity).
+Rotate a signing key if it may have been exposed, on a routine schedule the
+maintainers set, or when moving signing to new infrastructure.
 
-1. Generate a new key pair as above; call it `plugin-2.pub` / `plugin-2.key`
-   locally to avoid confusing it with the outgoing one during the overlap
-   period.
-2. Add `plugin-2.pub` to the trusted key sets **before** using it to sign
-   anything:
-   - Add it to `plugin.trusted_public_keys` on any node that needs to keep
-     working immediately (or ask users to, via a release announcement).
-   - Open a PR to the main `nginx-ui` repository adding it to
-     `internal/releasesign`'s trusted keys, so it ships compiled into a
-     future release. Keep the old key in that list too, so already-released
-     packages the old key signed keep verifying.
-3. Update `PLUGIN_SIGNING_KEY` / `PLUGIN_SIGNING_KEY_PASSWORD` in GitHub
-   Actions secrets to the new key pair.
-4. Sign all new releases with the new key going forward. Existing
-   `plugins/<id>.json` entries do not need to be touched — a release's
-   `signed_by` field says which key set to check against, not which specific
-   key, and old releases keep verifying against the old key as long as it
-   stays in the trusted set.
+1. Generate a new key pair as above. Call it `plugin-2.pub` /
+   `plugin-2.key` locally to keep it apart from the outgoing one during the
+   overlap.
+2. Pin `plugin-2.pub` in nginx-ui **before** signing anything with it:
+   `internal/releasesign` for the project release key, the partner key list
+   for a partner key. Keep the old key pinned too, so packages it already
+   signed keep verifying. The change ships with the next nginx-ui release.
+3. Once that release is out, switch the signing secret of the build
+   pipelines to the new key and sign every new package with it.
+4. Existing `plugins/<id>.json` entries need no change. An official or
+   partner entry does not name its key.
 5. After a deprecation window long enough that essentially every running
-   nginx-ui node has upgraded past the release that added the new key
-   (`internal/releasesign`), remove the old key from `internal/releasesign`
-   in a later nginx-ui release. Do not remove it from `internal/releasesign`
-   and the runtime setting at the same time as introducing the new key —
-   that would leave nodes that have not yet upgraded unable to verify
-   anything until they do.
+   nginx-ui node has upgraded past the release that pinned the new key,
+   remove the old key in a later nginx-ui release. From then on, packages
+   signed only by the old key count as unsigned on upgraded hosts, so
+   republish any that must stay installable before that.
 6. Document the rotation (old key id, new key id, effective date) in the
-   pull requests from steps 2–3 so there is a paper trail independent of who
-   ran it.
+   pull requests from steps 2 and 3, so there is a record independent of
+   who ran it.
 
 ## Security contact
 

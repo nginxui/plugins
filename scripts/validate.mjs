@@ -2,8 +2,8 @@
 // Validates the whole catalog: every plugins/<id>.json against
 // schema/entry.schema.json, v1/index.json against schema/catalog.schema.json,
 // plus the structural rules a JSON Schema alone cannot express (id
-// uniqueness, provider code registration, trust/signature consistency, and
-// that v1/index.json is actually up to date with plugins/*.json).
+// uniqueness, provider code registration, an author key on every community
+// entry, and that v1/index.json is actually up to date with plugins/*.json).
 //
 // Usage: node scripts/validate.mjs
 //
@@ -119,24 +119,15 @@ function checkNamingPolicy(entries) {
   ok('naming policy (NAME-1/NAME-2/NAME-3)')
 }
 
-/** community trust with an author-signed release needs the entry's own
- * verification key (internal/plugin.Marketplace.trustedKeys only trusts the
- * author key for TrustCommunity). Official/verified releases are signed by
- * the catalog's own CI key, never the author's. */
-function checkTrustAndSigning(entries) {
+/** A community package signs its plugin.sums with the author's own key, and
+ * the host only trusts that key through the entry's author_public_key. The
+ * keys behind official and verified packages are pinned by the host itself. */
+function checkAuthorKeys(entries) {
   for (const [file, entry] of entries) {
-    for (const release of entry.releases ?? []) {
-      if (release.signed_by === 'author') {
-        if (entry.trust !== 'community')
-          fail(`plugins/${file}`, `release ${release.version} is signed_by "author" but trust is ${JSON.stringify(entry.trust)}; only community releases may be author-signed`)
-        else if (!entry.author_public_key)
-          fail(`plugins/${file}`, `release ${release.version} is signed_by "author" but the entry has no author_public_key`)
-      }
-      if (release.signed_by === 'official' && entry.trust === 'community')
-        fail(`plugins/${file}`, `release ${release.version} is signed_by "official" but trust is "community"; community releases are signed by the author key, not the catalog CI key`)
-    }
+    if (entry.trust === 'community' && !entry.author_public_key)
+      fail(`plugins/${file}`, 'trust is "community" but the entry has no author_public_key')
   }
-  ok('trust level matches signing policy')
+  ok('every community entry has an author_public_key')
 }
 
 /** RFC 0001 PKG-14/PKG-15: a release needs at least one of "downloads" or
@@ -236,7 +227,7 @@ function main() {
   const entries = validateEntries()
   checkIdUniqueness(entries)
   checkNamingPolicy(entries)
-  checkTrustAndSigning(entries)
+  checkAuthorKeys(entries)
   checkDownloadsPlatforms(entries)
   checkProviderCodes(entries)
   checkIndex()

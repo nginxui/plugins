@@ -31,7 +31,7 @@
     },
     "author_public_key": {
       "type": "string",
-      "description": "Minisign public key (text form) used to sign community releases. Required when trust is \"community\" and any release declares signed_by \"author\".",
+      "description": "Minisign public key (text form) that signs plugin.sums in the packages of a community entry. Required when trust is \"community\".",
       "minLength": 1
     },
     "homepage_url": {
@@ -121,20 +121,14 @@
         "official",
         "verified",
         "community"
-      ]
+      ],
+      "description": "Trust level the entry claims. official: published by the nginx-ui project. verified: published by a partner organization whose key the project pins, with no claim about source review. community: signed by the author with author_public_key. The host derives the effective level from the key that signed plugin.sums inside the package."
     },
     "stage": {
       "type": "string",
       "enum": [
         "production",
         "beta"
-      ]
-    },
-    "signedBy": {
-      "type": "string",
-      "enum": [
-        "official",
-        "author"
       ]
     },
     "semver": {
@@ -149,7 +143,8 @@
     },
     "sha256": {
       "type": "string",
-      "pattern": "^[0-9a-f]{64}$"
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Lowercase hex sha256 of the archive, a download integrity check. The package signature is plugin.sums.minisig inside the archive."
     },
     "download": {
       "type": "object",
@@ -164,10 +159,6 @@
         },
         "sha256": {
           "$ref": "#/$defs/sha256"
-        },
-        "signature_url": {
-          "$ref": "#/$defs/httpsUrl",
-          "description": "Detached minisign signature, defaults to url + \".minisig\"."
         }
       }
     },
@@ -232,12 +223,6 @@
         },
         "sha256": {
           "$ref": "#/$defs/sha256"
-        },
-        "signature_url": {
-          "$ref": "#/$defs/httpsUrl"
-        },
-        "signed_by": {
-          "$ref": "#/$defs/signedBy"
         },
         "release_notes_url": {
           "$ref": "#/$defs/httpsUrl"

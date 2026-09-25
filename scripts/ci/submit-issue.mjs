@@ -101,19 +101,16 @@ async function main() {
 
   const version = release.tag_name.replace(/^v/, '')
   const portableAsset = findPortableAsset(release.assets, pluginId, version)
-  // A first submission is always community trust, signed_by "author", so its
-  // sha256 must be real: computed here, not left for a follow-up (unlike an
-  // "official" entry, whose sha256 the signing step fills in later).
-  const { downloads } = await buildDownloadsMap(release.assets, pluginId, version, { includeSha256: true, token })
+  // A first submission is always community trust. Its packages carry their
+  // own signature (plugin.sums.minisig), and the entry records the sha256 of
+  // every archive as a download check.
+  const { downloads } = await buildDownloadsMap(release.assets, pluginId, version, { token })
   if (!portableAsset && Object.keys(downloads).length === 0)
     fail(`${release.html_url} has no ${pluginId}-${version}.tar.gz or per-platform package asset.`)
 
-  let downloadUrl, sha256, signatureUrl
+  let downloadUrl, sha256
   if (portableAsset) {
     downloadUrl = portableAsset.browser_download_url
-    const sigAsset = release.assets.find(a => a.name === `${portableAsset.name}.minisig`)
-    if (sigAsset)
-      signatureUrl = sigAsset.browser_download_url
     const bytes = await downloadBinary(portableAsset.browser_download_url, token)
     sha256 = createHash('sha256').update(bytes).digest('hex')
   }
@@ -144,8 +141,6 @@ async function main() {
         ...(Object.keys(downloads).length > 0 ? { downloads } : {}),
         ...(downloadUrl ? { download_url: downloadUrl } : {}),
         ...(sha256 ? { sha256 } : {}),
-        ...(signatureUrl ? { signature_url: signatureUrl } : {}),
-        signed_by: 'author',
         release_notes_url: release.html_url,
         manifest: trimManifestSnapshot(manifest),
       },

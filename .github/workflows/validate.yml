@@ -2,9 +2,9 @@ name: Validate
 
 # Runs on every pull request. The schema job always runs and always must
 # pass. The per-release checks only run for entries the PR actually touches,
-# and degrade to a SKIP (not a failure) when a release asset, its signature,
-# or the official signing key are not available yet — see
-# scripts/ci/verify-release.mjs and scripts/ci/check-entry-repository.mjs.
+# and degrade to a SKIP (not a failure) when a release asset is not published
+# yet. See scripts/ci/verify-release.mjs and
+# scripts/ci/check-entry-repository.mjs.
 on:
   pull_request:
     paths:
@@ -53,7 +53,7 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
   release-integrity:
-    name: Release integrity (sha256, signature, repository)
+    name: Release integrity (sha256, plugin.sums, signature, repository)
     needs: schema
     if: needs.schema.outputs.changed_entries != ''
     runs-on: ubuntu-latest
@@ -64,6 +64,7 @@ jobs:
         with:
           node-version: "20"
 
+      # Community packages are checked against the entry's author_public_key.
       - name: Install minisign
         run: sudo apt-get update && sudo apt-get install -y minisign
 
@@ -81,9 +82,14 @@ jobs:
           ${{ needs.schema.outputs.changed_entries }}
           EOF
 
-      - name: Verify sha256 and minisign signature for each changed entry
-        env:
-          PLUGIN_SIGNING_PUBLIC_KEY: ${{ vars.PLUGIN_SIGNING_PUBLIC_KEY }}
+      # For every package of the newest release: check the catalog sha256,
+      # extract it, require plugin.sums and plugin.sums.minisig at its root,
+      # fail on a regular file plugin.sums does not list, run
+      # `sha256sum -c plugin.sums`, and for a community entry run
+      # `minisign -Vm plugin.sums -x plugin.sums.minisig -P <author_public_key>`.
+      # nginx-ui pins the official and partner keys itself, so official and
+      # verified entries skip only that last key check.
+      - name: Verify sha256, plugin.sums and signature for each changed entry
         run: |
           set -e
           while IFS= read -r file; do

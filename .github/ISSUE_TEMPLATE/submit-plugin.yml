@@ -46,9 +46,9 @@ body:
     attributes:
       label: Trust level requested
       description: >
-        New submissions are listed as "community" regardless of this answer;
-        see CONTRIBUTING.md#applying-for-verified-trust for how to apply for
-        "verified" after you have a community release in production use.
+        New submissions are listed as "community" regardless of this answer.
+        "verified" is reserved for partner organizations, see
+        CONTRIBUTING.md#partner-plugins.
       options:
         - community
       default: 0
@@ -59,8 +59,9 @@ body:
     attributes:
       label: Minisign public key
       description: >
-        Required before your submission can be merged (community releases
-        are verified against this key). Paste the contents of your
+        Required before your submission can be merged (the plugin.sums of
+        every package of a community entry is signed with this key, see
+        docs/signing.md). Paste the contents of your
         plugin.pub, or the single-line public key minisign prints. You can
         add this in a follow-up comment or commit if you do not have it yet.
       placeholder: |
