@@ -77,7 +77,10 @@ internally built plugins. Sources are merged in the order listed; the first
 source that lists a given plugin `id` wins. A community or self-hosted source
 generally needs `plugin.require_signature` relaxed or its packages signed
 with a key added to `plugin.trusted_public_keys`, since only the official
-source at the default URL is always required to be signed.
+source at the default URL is always required to be signed. Relaxing
+`plugin.require_signature` also caps every entry of a custom source at
+`community`, whatever `trust` it claims: a trust level is only honoured when
+the packages behind it are held to the signature policy.
 
 ## Trust levels
 
