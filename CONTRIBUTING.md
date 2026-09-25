@@ -1,7 +1,7 @@
 # Contributing a plugin
 
 This document is the step-by-step submission and review process for
-`nginx-ui-plugins`. Read `README.md` first for the catalog's shape and the
+`nginxui/plugins`. Read `README.md` first for the catalog's shape and the
 trust levels referenced below.
 
 ## Prerequisites
@@ -12,7 +12,7 @@ Before you submit, your plugin should have:
   looks like `v1.0.0` (SemVer) and whose assets include the packaged
   `.tar.gz` your plugin builds: either the portable `<id>-<version>.tar.gz`,
   or one `<id>-<version>-<goos>-<goarch>.tar.gz` per platform, or both (see
-  `nginx-ui-plugin-spec/spec/02-packaging.md` and
+  `plugin-spec/spec/02-packaging.md` and
   `spec/rfcs/0001-per-platform-packages.md` in the main project for the
   archive layout).
 - A `plugin.json` that passes `nginx-ui plugin lint` and, for a plugin with a
@@ -58,7 +58,7 @@ Required fields and what they mean are documented in
 - `name` and `description` are locale maps; `en` is required, additional
   locales are welcome. They can come straight from your `plugin.json`: its
   top level `name` and `description` are the `en` text, and its optional
-  `i18n` block (`nginx-ui-plugin-spec/spec/01-manifest.md` MAN-40, e.g.
+  `i18n` block (`plugin-spec/spec/01-manifest.md` MAN-40, e.g.
   `"i18n": { "zh_CN": { "name": "...", "description": "..." } }`) holds the
   other locales. The release workflow may fill both maps from it: the Issue
   form path does so for the entry it drafts, leaving out empty
@@ -143,7 +143,7 @@ node scripts/generate-codes.mjs /path/to/your/plugin.json
 ```
 
 This fails loudly if a code you declare is already registered to a different
-plugin id (see `nginx-ui-plugin-spec/spec/11-naming.md` NAME-4..NAME-6).
+plugin id (see `plugin-spec/spec/11-naming.md` NAME-4..NAME-6).
 
 ## Partner plugins
 

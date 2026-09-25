@@ -51,7 +51,7 @@ minisign -S -m plugin.sums -x plugin.sums.minisig -s /path/to/plugin.key \
 
 Archive the directory with `plugin.json` as the first entry and both files
 at the root. Running `sha256sum -c plugin.sums` inside an extracted package
-checks it. `build.sh` in nginx-ui-plugin-dns01 is a complete example: it
+checks it. `build.sh` in plugin-dns01 is a complete example: it
 writes `plugin.sums` for every platform package and signs it when
 `MINISIGN_KEY` names a minisign secret key file.
 
@@ -93,7 +93,7 @@ A CI job that signs uses a key created without a password
 the key in a secret of the repository that builds the plugin:
 
 1. Write the secret to a file inside the job and point the build at it,
-   e.g. `MINISIGN_KEY` for nginx-ui-plugin-dns01's `build.sh`. Delete the
+   e.g. `MINISIGN_KEY` for plugin-dns01's `build.sh`. Delete the
    file when the job ends.
 2. Sign only from a trusted context such as a tag push or a manual
    `workflow_dispatch`, never from a pull request of a fork.

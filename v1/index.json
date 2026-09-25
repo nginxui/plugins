@@ -13,9 +13,9 @@
         "zh_CN": "通过 lego 支持的 224 个 DNS 服务商解决 ACME DNS-01 挑战。"
       },
       "author": "nginx-ui",
-      "repository_url": "https://github.com/0xJacky/nginx-ui-plugin-dns01",
-      "readme_url": "https://raw.githubusercontent.com/0xJacky/nginx-ui-plugin-dns01/main/README.md",
-      "icon_url": "https://raw.githubusercontent.com/0xJacky/nginx-ui-plugin-dns01/main/webapp/public/icon.svg",
+      "repository_url": "https://github.com/nginxui/plugin-dns01",
+      "readme_url": "https://raw.githubusercontent.com/nginxui/plugin-dns01/main/README.md",
+      "icon_url": "https://raw.githubusercontent.com/nginxui/plugin-dns01/main/webapp/public/icon.svg",
       "categories": [
         "acme",
         "dns"
@@ -42,25 +42,25 @@
           ],
           "downloads": {
             "darwin-amd64": {
-              "url": "https://github.com/0xJacky/nginx-ui-plugin-dns01/releases/download/v1.0.0/com.nginxui.dns01-1.0.0-darwin-amd64.tar.gz"
+              "url": "https://github.com/nginxui/plugin-dns01/releases/download/v1.0.0/com.nginxui.dns01-1.0.0-darwin-amd64.tar.gz"
             },
             "darwin-arm64": {
-              "url": "https://github.com/0xJacky/nginx-ui-plugin-dns01/releases/download/v1.0.0/com.nginxui.dns01-1.0.0-darwin-arm64.tar.gz"
+              "url": "https://github.com/nginxui/plugin-dns01/releases/download/v1.0.0/com.nginxui.dns01-1.0.0-darwin-arm64.tar.gz"
             },
             "linux-amd64": {
-              "url": "https://github.com/0xJacky/nginx-ui-plugin-dns01/releases/download/v1.0.0/com.nginxui.dns01-1.0.0-linux-amd64.tar.gz"
+              "url": "https://github.com/nginxui/plugin-dns01/releases/download/v1.0.0/com.nginxui.dns01-1.0.0-linux-amd64.tar.gz"
             },
             "linux-arm64": {
-              "url": "https://github.com/0xJacky/nginx-ui-plugin-dns01/releases/download/v1.0.0/com.nginxui.dns01-1.0.0-linux-arm64.tar.gz"
+              "url": "https://github.com/nginxui/plugin-dns01/releases/download/v1.0.0/com.nginxui.dns01-1.0.0-linux-arm64.tar.gz"
             },
             "windows-amd64": {
-              "url": "https://github.com/0xJacky/nginx-ui-plugin-dns01/releases/download/v1.0.0/com.nginxui.dns01-1.0.0-windows-amd64.tar.gz"
+              "url": "https://github.com/nginxui/plugin-dns01/releases/download/v1.0.0/com.nginxui.dns01-1.0.0-windows-amd64.tar.gz"
             },
             "windows-arm64": {
-              "url": "https://github.com/0xJacky/nginx-ui-plugin-dns01/releases/download/v1.0.0/com.nginxui.dns01-1.0.0-windows-arm64.tar.gz"
+              "url": "https://github.com/nginxui/plugin-dns01/releases/download/v1.0.0/com.nginxui.dns01-1.0.0-windows-arm64.tar.gz"
             }
           },
-          "release_notes_url": "https://github.com/0xJacky/nginx-ui-plugin-dns01/releases/tag/v1.0.0",
+          "release_notes_url": "https://github.com/nginxui/plugin-dns01/releases/tag/v1.0.0",
           "manifest": {
             "id": "com.nginxui.dns01",
             "name": "DNS-01 Challenge",

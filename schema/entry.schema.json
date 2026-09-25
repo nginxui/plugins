@@ -139,7 +139,7 @@
     "platform": {
       "type": "string",
       "pattern": "^([a-z0-9]+-[a-z0-9]+|any)$",
-      "description": "\"<goos>-<goarch>\" (e.g. \"linux-amd64\") as Go spells them, or \"any\" for a platform-independent package. Matches schema/catalog.schema.json's platformKey in nginx-ui-plugin-spec (NAME-9)."
+      "description": "\"<goos>-<goarch>\" (e.g. \"linux-amd64\") as Go spells them, or \"any\" for a platform-independent package. Matches schema/catalog.schema.json's platformKey in plugin-spec (NAME-9)."
     },
     "sha256": {
       "type": "string",

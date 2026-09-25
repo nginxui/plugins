@@ -1,4 +1,4 @@
-# nginx-ui-plugins
+# nginxui/plugins
 
 The official plugin catalog for [nginx-ui](https://github.com/0xJacky/nginx-ui).
 This repository is data and tooling, not code that runs inside nginx-ui
@@ -66,8 +66,8 @@ speaks, whose `platforms` list (or `"any"`) covers the host, and whose
 `min_nginx_ui_version` the running version satisfies. A release may publish a
 single portable package (`download_url`), one package per platform
 (`downloads`, keyed by `"<goos>-<goarch>"` or `"any"`), or both — see
-[RFC 0001](https://github.com/0xJacky/nginx-ui-plugin-spec/blob/main/spec/rfcs/0001-per-platform-packages.md)
-in `nginx-ui-plugin-spec`. The host picks `downloads[<its platform>]`, then
+[RFC 0001](https://github.com/nginxui/plugin-spec/blob/main/spec/rfcs/0001-per-platform-packages.md)
+in `plugin-spec`. The host picks `downloads[<its platform>]`, then
 `downloads["any"]`, then falls back to the portable package. Before
 installing the selected package, the host:
 
@@ -156,7 +156,7 @@ be broken or unsafe). In short:
   before a plugin using it can be listed, so two plugins never silently claim
   the same vendor. See `scripts/generate-codes.mjs`.
 
-These rules mirror `nginx-ui-plugin-spec/spec/11-naming.md`.
+These rules mirror `plugin-spec/spec/11-naming.md`.
 
 ## Local development
 

@@ -335,7 +335,7 @@ function checkKeyring() {
 }
 
 function main() {
-  console.log(`nginx-ui-plugins validate (node ${process.version})\n`)
+  console.log(`nginxui/plugins validate (node ${process.version})\n`)
 
   const entries = validateEntries()
   checkIdUniqueness(entries)

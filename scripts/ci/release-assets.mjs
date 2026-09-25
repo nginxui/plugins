@@ -6,8 +6,8 @@
 // picked up automatically is shaped the same way whether it ships one
 // package or one per platform.
 //
-// See nginx-ui-plugin-spec/spec/rfcs/0001-per-platform-packages.md and the
-// packaging done by build.sh in a plugin such as nginx-ui-plugin-dns01.
+// See plugin-spec/spec/rfcs/0001-per-platform-packages.md and the
+// packaging done by build.sh in a plugin such as plugin-dns01.
 
 const SHA256_HEX = /\b([0-9a-f]{64})\b/i
 
@@ -67,7 +67,7 @@ async function fetchAssetText(url, token) {
  * Builds the "downloads" map (RFC 0001 PKG-14) for a release from its GitHub
  * assets: one entry per per-platform archive found, each with its "url" and
  * the digest read from the archive's small ".sha256" sidecar asset. That is
- * the file nginx-ui-plugin-dns01/README.md's Packaging section describes as
+ * the file plugin-dns01/README.md's Packaging section describes as
  * feeding this map, so every platform's archive (tens of MiB) does not have
  * to be downloaded just to hash it here. The package signature is not part
  * of the map: it lives in plugin.sums.minisig inside each archive.

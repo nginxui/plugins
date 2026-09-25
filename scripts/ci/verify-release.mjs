@@ -347,7 +347,7 @@ async function verifyPackage(entry, label, pkg) {
     return false
   }
 
-  const dir = mkdtempSync(path.join(tmpdir(), 'nginx-ui-plugins-package-'))
+  const dir = mkdtempSync(path.join(tmpdir(), 'nginxui-plugins-package-'))
   try {
     const archive = path.join(dir, 'package.tar.gz')
     const root = path.join(dir, 'package')
