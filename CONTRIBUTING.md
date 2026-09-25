@@ -158,8 +158,8 @@ reviewed its source.
    in the signed partner keyring `v1/partners.json`, and send back a
    partner certificate: `plugin.partner` (the partner's public key) and
    `plugin.partner.minisig` (a release key signature over it that names the
-   partner and an expiry date). See "Issuing a partner certificate" in
-   `docs/signing.md`.
+   partner and, optionally, an expiry date). See "Issuing a partner
+   certificate" in `docs/signing.md`.
 3. The partner puts both files, unchanged, at the root of every package
    before writing `plugin.sums`, so `plugin.sums` lists them like any other
    file, and signs `plugin.sums` with its own key as usual.
@@ -168,11 +168,14 @@ reviewed its source.
 
 Hosts install such a package as `verified` when the certificate verifies
 against the release key they pin, or when their copy of the keyring lists
-the key. No nginx-ui release is involved. A certificate stops working after
-its expiry date, so ask the maintainers for a new one before then. If the
-key may have leaked, tell the maintainers through a private security
-advisory: they revoke it in `partners/`, and hosts stop treating it as a
-partner key on their next catalog refresh, certificate or not.
+the key. No nginx-ui release is involved. If the key may have leaked, tell
+the maintainers through a private security advisory: they revoke it in
+`partners/`, and hosts stop treating it as a partner key on their next
+catalog refresh, certificate or not. Revocation is the main safeguard. The
+maintainers still recommend a long expiry on the certificate, because a
+host that never refreshes the keyring would otherwise trust a leaked key
+forever. A certificate with an expiry stops working after that date, so ask
+the maintainers for a new one before then.
 
 ## Yank procedure
 

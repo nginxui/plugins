@@ -111,8 +111,8 @@ partner key, and the partner ships it unchanged in every package:
 - `plugin.partner`: the partner's minisign public key in text form, the
   file `minisign -G` wrote.
 - `plugin.partner.minisig`: a release key signature over the exact bytes of
-  `plugin.partner`, whose trusted comment is
-  `partner:<name>;expires:<YYYY-MM-DD>`.
+  `plugin.partner`, whose trusted comment is `partner:<name>`, or
+  `partner:<name>;expires:<YYYY-MM-DD>` with an expiry.
 
 The partner generates a key pair and sends only the public half:
 
@@ -121,37 +121,38 @@ minisign -G -p partner.pub -s partner.key
 ```
 
 A maintainer, on the machine that holds the release secret key, issues the
-certificate:
+certificate. `;expires:<YYYY-MM-DD>` is optional:
 
 ```sh
 cp partner.pub plugin.partner
 minisign -S -m plugin.partner -x plugin.partner.minisig \
-  -s /path/to/release.key -t "partner:<name>;expires:<YYYY-MM-DD>"
+  -s /path/to/release.key -t "partner:<name>[;expires:<YYYY-MM-DD>]"
 ```
 
-or with the nginx-ui CLI:
+or with the nginx-ui CLI, where `--expires` is optional:
 
 ```sh
 nginx-ui plugin certify partner.pub --key /path/to/release.key \
-  --name <name> --expires <YYYY-MM-DD>
+  --name <name> [--expires <YYYY-MM-DD>]
 ```
 
 - `<name>` is the partner's name in `partners/<name>.json`. Every certified
   partner has that file, even when all its packages carry a certificate,
   because it is where the key gets revoked.
-- The expiry bounds the damage of a leaked partner key on hosts that never
-  refresh the keyring. Pick a date that fits the agreement with the partner,
-  and issue a new certificate before it passes.
+- Revocation through the keyring is the primary way to withdraw a partner
+  key. The expiry is a backstop for hosts that never refresh the keyring:
+  without one, such a host trusts a leaked key forever. Set a long expiry,
+  a few years for example, and issue a new certificate before it passes.
 - The certificate only vouches for the key it contains: `plugin.sums.minisig`
   must be made by that key.
 
 The maintainers send both files back to the partner, who puts them at the
 package root as described in [Signing a package](#signing-a-package).
 `.github/workflows/validate.yml` checks the certificate of a `verified`
-entry's newest release: the trusted comment, the expiry, that the key is
-not revoked, that `plugin.sums` is signed by the certified key and, when the
-`PLUGIN_SIGNING_PUBLIC_KEY` repository variable holds the release public
-key, the release key signature.
+entry's newest release: the trusted comment, the expiry if it has one, that
+the key is not revoked, that `plugin.sums` is signed by the certified key
+and, when the `PLUGIN_SIGNING_PUBLIC_KEY` repository variable holds the
+release public key, the release key signature.
 
 ## Publishing the partner keyring
 
@@ -229,10 +230,11 @@ Keep the revoked file in `partners/`: deleting it drops the key id from
 `revoked`. To revoke a key the partner has replaced, keep the old key in a
 file of its own, for example `partners/<name>-2026.json`, marked revoked.
 
-A host that never refreshes never sees the revocation. There the expiry
+A host that never refreshes never sees the revocation. There only an expiry
 bounds the damage: after the certificate's expiry date the host stops
 accepting the certificate, and after a listing's `expires` it stops
-accepting that listing.
+accepting that listing. A certificate without an expiry stays valid on such
+a host for good, which is why certificates should carry a long one.
 
 ## Rotation procedure
 
@@ -249,7 +251,7 @@ maintainers set, or when moving signing to new infrastructure.
    - A partner key: issue a certificate for the new key and switch
      `public_key` in `partners/<name>.json` to it. No nginx-ui release is
      needed. Packages signed with the old key keep verifying through their
-     own certificate until it expires.
+     own certificate until it expires, or until the old key is revoked.
 3. Once that release is out, or the new keyring is published, switch the
    signing secret of the build pipelines to the new key and sign every new
    package with it. Keep signing partner certificates and

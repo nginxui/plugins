@@ -13,11 +13,11 @@
 //    official entries skip this key check here.
 // 4. For a verified entry carrying a partner certificate (plugin.partner and
 //    plugin.partner.minisig at its root): plugin.sums lists both files, the
-//    trusted comment reads partner:<name>;expires:<YYYY-MM-DD> and has not
-//    expired, the certified key is not revoked in partners/, the certificate
-//    verifies against the release key in PLUGIN_SIGNING_PUBLIC_KEY (SKIP when
-//    that variable is empty), and plugin.sums.minisig is signed by the
-//    certified key. Without a certificate, plugin.sums.minisig must be signed
+//    trusted comment reads partner:<name>, optionally followed by
+//    ;expires:<YYYY-MM-DD> that has not passed, the certified key is not
+//    revoked in partners/, the certificate verifies against the release key
+//    in PLUGIN_SIGNING_PUBLIC_KEY (SKIP when that variable is empty), and
+//    plugin.sums.minisig is signed by the certified key. Without a certificate, plugin.sums.minisig must be signed
 //    by a key listed in partners/ that is neither revoked nor expired.
 //
 // tar, sha256sum and minisign must be on PATH (.github/workflows/validate.yml
@@ -45,7 +45,7 @@ const SIGNATURE = 'plugin.sums.minisig'
 const PARTNER = 'plugin.partner'
 const PARTNER_SIGNATURE = 'plugin.partner.minisig'
 const SUMS_LINE = /^([0-9a-f]{64}) {2}(.+)$/
-const CERTIFICATE_COMMENT = /^partner:([^;]+);expires:(\S+)$/
+const CERTIFICATE_COMMENT = /^partner:([^;]+)(?:;expires:(\S+))?$/
 
 function log(status, message) {
   console.log(`${status} ${message}`)
@@ -216,13 +216,13 @@ function verifyPartner(label, dir, listed) {
   }
 
   const comment = certificate.trustedComment.match(CERTIFICATE_COMMENT)
-  if (!comment || !isDate(comment[2])) {
-    log('FAIL', `${label}: ${PARTNER_SIGNATURE} trusted comment ${JSON.stringify(certificate.trustedComment)} is not partner:<name>;expires:<YYYY-MM-DD>`)
+  if (!comment || (comment[2] !== undefined && !isDate(comment[2]))) {
+    log('FAIL', `${label}: ${PARTNER_SIGNATURE} trusted comment ${JSON.stringify(certificate.trustedComment)} is not partner:<name> or partner:<name>;expires:<YYYY-MM-DD>`)
     return false
   }
   const [, name, expires] = comment
-  const certified = `certificate for ${JSON.stringify(name)} (key ${partnerKey.id}, expires ${expires})`
-  if (expires < today()) {
+  const certified = `certificate for ${JSON.stringify(name)} (key ${partnerKey.id}, ${expires ? `expires ${expires}` : 'no expiry'})`
+  if (expires && expires < today()) {
     log('FAIL', `${label}: ${certified} has expired`)
     return false
   }
