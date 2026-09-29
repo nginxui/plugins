@@ -6,11 +6,15 @@
       "id": "com.nginxui.dns01",
       "name": {
         "en": "DNS-01 Challenge",
-        "zh_CN": "DNS-01 验证"
+        "ja_JP": "DNS-01 チャレンジ",
+        "zh_CN": "DNS-01 验证",
+        "zh_TW": "DNS-01 驗證"
       },
       "description": {
-        "en": "Solve the ACME DNS-01 challenge with any of the 224 DNS providers supported by lego.",
-        "zh_CN": "通过 lego 支持的 224 个 DNS 服务商解决 ACME DNS-01 挑战。"
+        "en": "Validate domains for certificates through DNS records, with more than 200 DNS providers.",
+        "ja_JP": "200 以上の DNS プロバイダーに対応し、DNS レコードで証明書のドメインを検証します。",
+        "zh_CN": "支持 200 多家 DNS 服务商，用 DNS 记录为证书验证域名。",
+        "zh_TW": "支援 200 多家 DNS 服務商，以 DNS 記錄為憑證驗證網域。"
       },
       "author": "nginx-ui",
       "repository_url": "https://github.com/nginxui/plugin-dns01",
@@ -65,7 +69,7 @@
             "id": "com.nginxui.dns01",
             "name": "DNS-01 Challenge",
             "version": "1.0.0",
-            "description": "Solve the ACME DNS-01 challenge with any of the DNS providers supported by lego.",
+            "description": "Validate domains for certificates through DNS records, with more than 200 DNS providers.",
             "icon_path": "webapp/dist/icon.svg",
             "api_version": 1,
             "min_nginx_ui_version": "2.7.0",
