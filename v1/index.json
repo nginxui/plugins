@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-22T00:00:00Z",
+  "updated_at": "2026-09-30T00:00:00Z",
   "plugins": [
     {
       "id": "com.nginxui.dns01",
@@ -116,6 +116,168 @@
                   "display_name": "Default propagation timeout (seconds)",
                   "help_text": "Applied to providers that do not report a propagation timeout of their own.",
                   "default": 120
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "com.nginxui.log-analytics",
+      "name": {
+        "en": "Log Analytics",
+        "ja_JP": "ログ分析",
+        "zh_CN": "日志分析",
+        "zh_TW": "日誌分析"
+      },
+      "description": {
+        "en": "Search nginx access logs with structured queries and see traffic on a dashboard with a visitor map.",
+        "ja_JP": "Nginx のアクセスログを構造化検索し、ダッシュボードと訪問者マップでトラフィックを確認します。",
+        "zh_CN": "对 Nginx 访问日志做结构化搜索，在面板和访客地图上查看流量。",
+        "zh_TW": "對 Nginx 存取日誌做結構化搜尋，在面板和訪客地圖上檢視流量。"
+      },
+      "author": "nginx-ui",
+      "repository_url": "https://github.com/nginxui/plugin-log-analytics",
+      "readme_url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics/main/README.md",
+      "icon_url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics/main/webapp/public/icon.svg",
+      "categories": [
+        "logs",
+        "analytics"
+      ],
+      "capabilities": [
+        "http"
+      ],
+      "license": "AGPL-3.0-only",
+      "trust": "official",
+      "stage": "production",
+      "releases": [
+        {
+          "version": "1.0.0",
+          "released_at": "2026-09-30T00:00:00Z",
+          "api_version": 1,
+          "min_nginx_ui_version": "2.7.0",
+          "platforms": [
+            "darwin-amd64",
+            "darwin-arm64",
+            "linux-amd64",
+            "linux-arm64",
+            "windows-amd64",
+            "windows-arm64"
+          ],
+          "downloads": {
+            "darwin-amd64": {
+              "url": "https://github.com/nginxui/plugin-log-analytics/releases/download/v1.0.0/com.nginxui.log-analytics-1.0.0-darwin-amd64.tar.gz"
+            },
+            "darwin-arm64": {
+              "url": "https://github.com/nginxui/plugin-log-analytics/releases/download/v1.0.0/com.nginxui.log-analytics-1.0.0-darwin-arm64.tar.gz"
+            },
+            "linux-amd64": {
+              "url": "https://github.com/nginxui/plugin-log-analytics/releases/download/v1.0.0/com.nginxui.log-analytics-1.0.0-linux-amd64.tar.gz"
+            },
+            "linux-arm64": {
+              "url": "https://github.com/nginxui/plugin-log-analytics/releases/download/v1.0.0/com.nginxui.log-analytics-1.0.0-linux-arm64.tar.gz"
+            },
+            "windows-amd64": {
+              "url": "https://github.com/nginxui/plugin-log-analytics/releases/download/v1.0.0/com.nginxui.log-analytics-1.0.0-windows-amd64.tar.gz"
+            },
+            "windows-arm64": {
+              "url": "https://github.com/nginxui/plugin-log-analytics/releases/download/v1.0.0/com.nginxui.log-analytics-1.0.0-windows-arm64.tar.gz"
+            }
+          },
+          "release_notes_url": "https://github.com/nginxui/plugin-log-analytics/releases/tag/v1.0.0",
+          "manifest": {
+            "id": "com.nginxui.log-analytics",
+            "name": "Log Analytics",
+            "version": "1.0.0",
+            "description": "Search nginx access logs with structured queries and see traffic on a dashboard with a visitor map.",
+            "icon_path": "webapp/dist/icon.svg",
+            "api_version": 1,
+            "min_nginx_ui_version": "2.7.0",
+            "i18n": {
+              "ja_JP": {
+                "name": "ログ分析",
+                "description": "Nginx のアクセスログを構造化検索し、ダッシュボードと訪問者マップでトラフィックを確認します。"
+              },
+              "zh_CN": {
+                "name": "日志分析",
+                "description": "对 Nginx 访问日志做结构化搜索，在面板和访客地图上查看流量。"
+              },
+              "zh_TW": {
+                "name": "日誌分析",
+                "description": "對 Nginx 存取日誌做結構化搜尋，在面板和訪客地圖上檢視流量。"
+              }
+            },
+            "server": {
+              "executables": {
+                "darwin-amd64": "server/dist/log-analytics-darwin-amd64",
+                "darwin-arm64": "server/dist/log-analytics-darwin-arm64",
+                "linux-amd64": "server/dist/log-analytics-linux-amd64",
+                "linux-arm64": "server/dist/log-analytics-linux-arm64",
+                "windows-amd64": "server/dist/log-analytics-windows-amd64.exe",
+                "windows-arm64": "server/dist/log-analytics-windows-arm64.exe"
+              },
+              "lifecycle": "resident"
+            },
+            "webapp": {
+              "bundle_path": "webapp/dist/main.js",
+              "style_path": "webapp/dist/style.css",
+              "shared": {
+                "@vueuse/core": ">=15.0.0",
+                "antdv-next": "~1.5",
+                "pinia": ">=4.0.3 <5",
+                "vue": ">=3.5.42 <4",
+                "vue-router": ">=5.3.1 <6"
+              },
+              "chunks": {
+                "dashboard": "webapp/dist/chunks/dashboard.js",
+                "search": "webapp/dist/chunks/search.js"
+              }
+            },
+            "capabilities": [
+              "http"
+            ],
+            "permissions": [
+              "log.files",
+              "network",
+              "kv"
+            ],
+            "events": [
+              "log.paths_changed"
+            ],
+            "network_hosts": [
+              "cloud.nginxui.com"
+            ],
+            "http": {
+              "listen": "unix"
+            },
+            "settings_schema": {
+              "settings": [
+                {
+                  "key": "incremental_index_interval",
+                  "type": "number",
+                  "display_name": "Indexing interval (minutes)",
+                  "help_text": "How often the logs are checked for new lines. Zero or empty means 15 minutes.",
+                  "default": 15
+                },
+                {
+                  "key": "max_concurrent_index_tasks",
+                  "type": "number",
+                  "display_name": "Logs indexed at once",
+                  "help_text": "The most log files indexed at the same time. A lower number uses less memory. Zero picks a value from the available CPUs.",
+                  "default": 0
+                },
+                {
+                  "key": "index_custom_mmdb",
+                  "type": "text",
+                  "display_name": "Custom IP location database",
+                  "help_text": "Path of your own IP location database file. Empty uses the downloaded one."
+                },
+                {
+                  "key": "geo_map_path",
+                  "type": "text",
+                  "display_name": "Map files folder",
+                  "help_text": "Folder with the map outline files. Empty uses the plugin's own folder. Files not found there are loaded online."
                 }
               ]
             }
