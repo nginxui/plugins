@@ -1,5 +1,11 @@
 {
   "schema_version": 1,
+  "name": {
+    "en": "NGINX UI Plugins",
+    "zh_CN": "NGINX UI 插件",
+    "zh_TW": "NGINX UI 外掛",
+    "ja_JP": "NGINX UI プラグイン"
+  },
   "updated_at": "2026-09-30T00:00:00Z",
   "plugins": [
     {

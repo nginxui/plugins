@@ -17,6 +17,13 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const PLUGINS_DIR = path.join(ROOT, 'plugins')
 const INDEX_PATH = path.join(ROOT, 'v1', 'index.json')
 const SCHEMA_VERSION = 1
+// Name a host shows for this catalog as the source of its plugins.
+const CATALOG_NAME = {
+  en: 'NGINX UI Plugins',
+  zh_CN: 'NGINX UI 插件',
+  zh_TW: 'NGINX UI 外掛',
+  ja_JP: 'NGINX UI プラグイン',
+}
 
 export function loadEntries() {
   const files = readdirSync(PLUGINS_DIR).filter(f => f.endsWith('.json')).sort()
@@ -68,11 +75,11 @@ export function newestReleaseTimestamp(entries) {
 export function buildIndex() {
   const plugins = loadEntries()
   const updatedAt = newestReleaseTimestamp(plugins)
-  // Key order is fixed here (schema_version, updated_at, plugins), matching
-  // internal/plugin.CatalogDocument's field order, so this object can be
-  // serialized directly with JSON.stringify without a separate reordering
-  // step, and two calls to buildIndex() always stringify identically.
-  const document = { schema_version: SCHEMA_VERSION }
+  // Key order is fixed here (schema_version, name, updated_at, plugins), so
+  // this object can be serialized directly with JSON.stringify without a
+  // separate reordering step, and two calls to buildIndex() always stringify
+  // identically.
+  const document = { schema_version: SCHEMA_VERSION, name: CATALOG_NAME }
   if (updatedAt)
     document.updated_at = updatedAt
   document.plugins = plugins

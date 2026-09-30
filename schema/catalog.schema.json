@@ -15,6 +15,10 @@
       "const": 1,
       "description": "Matches internal/plugin.CatalogSchemaVersion. A host that does not recognize this value refuses the whole document."
     },
+    "name": {
+      "$ref": "entry.schema.json#/$defs/localizedText",
+      "description": "Name of the catalog a host shows for this source (plugin-spec PKG-30)."
+    },
     "updated_at": {
       "type": "string",
       "format": "date-time"
