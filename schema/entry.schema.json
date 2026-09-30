@@ -307,6 +307,33 @@
               }
             }
           }
+        },
+        "server": {
+          "type": "object",
+          "description": "Only server.resources is described here, the rest of the block is not read from the snapshot.",
+          "additionalProperties": true,
+          "properties": {
+            "resources": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Resource hints of the manifest (spec MAN-39).",
+              "properties": {
+                "memory_mb": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cpu_percent": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "recommended_memory_mb": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Memory in MiB the machine, or the container the host runs in, should have for the plugin to work well. Advice only, a host never refuses to install or run a plugin because of it. 0 or absent means no hint."
+                }
+              }
+            }
+          }
         }
       }
     }
