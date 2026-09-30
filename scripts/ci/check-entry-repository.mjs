@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Cross-checks one plugins/<id>.json against the GitHub repository it
-// declares: does a release exist, and does its tag match the version this
-// catalog entry says is newest. Network-dependent, so it is only run from
+// declares: does a release exist, and does the catalog entry list the version
+// of its latest GitHub Release. Network-dependent, so it is only run from
 // .github/workflows/validate.yml, never from scripts/validate.mjs.
 //
 // Usage: node scripts/ci/check-entry-repository.mjs <plugins/id.json>
@@ -9,10 +9,7 @@
 
 import { readFileSync } from 'node:fs'
 import { parseGithubRepoUrl, getLatestRelease } from './github.mjs'
-
-function newestVersion(entry) {
-  return [...(entry.releases ?? [])].map(r => r.version).sort().at(-1)
-}
+import { tagVersion } from './releases.mjs'
 
 async function main() {
   const entryPath = process.argv[2]
@@ -36,11 +33,13 @@ async function main() {
     return
   }
 
-  const tagVersion = release.tag_name.replace(/^v/, '')
-  const catalogVersion = newestVersion(entry)
+  // GitHub's latest release is never a prerelease, and the catalog also lists
+  // prereleases and older versions, so it only has to contain that version.
+  const latest = tagVersion(release.tag_name)
+  const listed = (entry.releases ?? []).map(r => r.version)
 
-  if (tagVersion !== catalogVersion) {
-    console.error(`FAIL ${entry.id}: catalog's newest release is ${catalogVersion}, but ${repo.owner}/${repo.repo}'s latest GitHub Release is ${release.tag_name} (${tagVersion})`)
+  if (!listed.includes(latest)) {
+    console.error(`FAIL ${entry.id}: the catalog lists ${listed.join(', ') || 'no release'}, but ${repo.owner}/${repo.repo}'s latest GitHub Release is ${release.tag_name} (${latest})`)
     console.error('      run the poll-releases workflow, or update plugins/<id>.json by hand, before merging')
     process.exit(1)
   }

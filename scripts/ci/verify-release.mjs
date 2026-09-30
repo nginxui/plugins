@@ -39,6 +39,7 @@ import { execFileSync } from 'node:child_process'
 import { loadPartners } from '../build-partners.mjs'
 import { parsePublicKey, parseSignature, publicKeyLine, verifySignature } from '../lib/minisign.mjs'
 import { isDate } from '../lib/schema-validator.mjs'
+import { compareSemver } from './semver.mjs'
 
 const SUMS = 'plugin.sums'
 const SIGNATURE = 'plugin.sums.minisig'
@@ -52,7 +53,7 @@ function log(status, message) {
 }
 
 function newestRelease(entry) {
-  return [...(entry.releases ?? [])].sort((a, b) => (a.version > b.version ? 1 : a.version < b.version ? -1 : 0)).at(-1)
+  return [...(entry.releases ?? [])].sort((a, b) => compareSemver(a.version, b.version)).at(-1)
 }
 
 async function tryDownload(url) {

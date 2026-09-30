@@ -123,10 +123,26 @@ certificate, publishing the keyring and revoking a key.
 `stage` is independent of trust: `production` or `beta`, signaling how much
 real-world use a release has had, not who vetted it.
 
-A release is shown as beta when its version has a prerelease part
-(`1.0.0-beta.1`). A release with a plain version can set `"beta": true` to be
-shown as beta as well. A stable installation is never moved to a beta release
-on its own.
+Every release belongs to a release channel: `stable`, `beta` or `dev`, from
+the most to the least stable. Without a `channel` on the release, the version
+decides: no prerelease part (`1.0.0`) is stable, a prerelease that starts with
+`alpha`, `dev`, `nightly`, `snapshot`, `canary` or `preview`
+(`1.0.0-nightly.20260930`) is dev, and any other prerelease (`1.0.0-beta.1`,
+`1.0.0-rc.1`) is beta. A release with a plain version can set `"channel"` to
+be put on a less stable channel. Each installed plugin follows the channel its
+user picked, stable by default, and is offered the newest release on that
+channel or a more stable one, so a beta follower also gets the stable release
+that ends a beta series and you keep one line of releases. Number prereleases
+with dot separated numeric identifiers, `1.1.0-beta.10` and not
+`1.1.0-beta10`: releases are ordered by semantic versioning precedence, where
+`beta.10` follows `beta.9` and `beta10` sorts before `beta9`. A host installs
+any older release that is not yanked when asked to.
+
+The poll workflow adds every GitHub Release of a plugin repository that the
+entry does not list yet, prereleases included and older ones a first poll
+missed. It sets `"channel": "beta"` on a release that GitHub marks as a
+prerelease when its version would otherwise read as stable. Draft releases are
+skipped.
 
 ## How to submit a plugin
 

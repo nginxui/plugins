@@ -31,6 +31,29 @@ async function githubJson(url, token) {
   return response.json()
 }
 
+/** Every GitHub Release of a repository, drafts excluded, newest first as
+ * GitHub lists them. Follows the pages (100 per page) until one comes back
+ * short. Returns an empty list on a 404, like getLatestRelease. fetchImpl is
+ * replaceable for tests. */
+export async function listReleases(owner, repo, token, fetchImpl = fetch) {
+  const perPage = 100
+  const maxPages = 20
+  const releases = []
+  for (let page = 1; page <= maxPages; page++) {
+    const url = `${API}/repos/${owner}/${repo}/releases?per_page=${perPage}&page=${page}`
+    const response = await fetchImpl(url, { headers: authHeaders(token) })
+    if (response.status === 404)
+      return releases
+    if (!response.ok)
+      throw new Error(`GET ${url}: HTTP ${response.status} ${await response.text()}`)
+    const batch = await response.json()
+    releases.push(...batch.filter(release => !release.draft))
+    if (batch.length < perPage)
+      break
+  }
+  return releases
+}
+
 /** GET /repos/{owner}/{repo}/releases/latest. Returns null (not a throw) on a
  * 404, since a brand-new repository legitimately has no release yet. */
 export async function getLatestRelease(owner, repo, token) {

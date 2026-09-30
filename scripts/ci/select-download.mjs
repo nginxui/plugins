@@ -15,9 +15,10 @@
 // the release has no package for that platform.
 
 import { readFileSync } from 'node:fs'
+import { compareSemver } from './semver.mjs'
 
 function newestRelease(entry) {
-  return [...(entry.releases ?? [])].sort((a, b) => (a.version > b.version ? 1 : a.version < b.version ? -1 : 0)).at(-1)
+  return [...(entry.releases ?? [])].sort((a, b) => compareSemver(a.version, b.version)).at(-1)
 }
 
 /** Mirrors CatalogRelease.DownloadFor's selection order (PKG-15): the exact

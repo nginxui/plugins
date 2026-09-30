@@ -33,6 +33,9 @@ jobs:
         with:
           node-version: "20"
 
+      - name: node --test scripts/ci/*.test.mjs
+        run: node --test scripts/ci/*.test.mjs
+
       - name: node scripts/validate.mjs
         run: node scripts/validate.mjs
 
