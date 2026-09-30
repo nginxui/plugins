@@ -129,7 +129,8 @@
       "enum": [
         "production",
         "beta"
-      ]
+      ],
+      "description": "beta marks the whole plugin as beta (PKG-28)."
     },
     "semver": {
       "type": "string",
@@ -229,6 +230,10 @@
         },
         "yanked": {
           "type": "boolean"
+        },
+        "beta": {
+          "type": "boolean",
+          "description": "RFC 0019 PKG-28: the publisher calls this release beta although its version has no prerelease part. A version with a prerelease part (for example 1.0.0-beta.1) is beta without it. A host shows a beta release with a mark and does not move a stable installation to it on its own."
         },
         "manifest": {
           "$ref": "#/$defs/manifestSnapshot"

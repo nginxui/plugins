@@ -123,6 +123,11 @@ certificate, publishing the keyring and revoking a key.
 `stage` is independent of trust: `production` or `beta`, signaling how much
 real-world use a release has had, not who vetted it.
 
+A release is shown as beta when its version has a prerelease part
+(`1.0.0-beta.1`). A release with a plain version can set `"beta": true` to be
+shown as beta as well. A stable installation is never moved to a beta release
+on its own.
+
 ## How to submit a plugin
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full step-by-step process
