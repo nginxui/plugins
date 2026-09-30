@@ -16,6 +16,44 @@
   "repository_url": "https://github.com/nginxui/plugin-dns01",
   "readme_url": "https://raw.githubusercontent.com/nginxui/plugin-dns01/main/README.md",
   "icon_url": "https://raw.githubusercontent.com/nginxui/plugin-dns01/main/webapp/public/icon.svg",
+  "screenshots": [
+    {
+      "url": "https://raw.githubusercontent.com/nginxui/plugin-dns01/main/docs/screenshots/1-credentials.png",
+      "caption": {
+        "en": "Pick a saved DNS credential when issuing a certificate",
+        "zh_CN": "签发证书时选择已保存的 DNS 凭据",
+        "zh_TW": "簽發憑證時選擇已儲存的 DNS 憑證",
+        "ja_JP": "証明書の発行時に保存済みの DNS 認証情報を選択"
+      }
+    },
+    {
+      "url": "https://raw.githubusercontent.com/nginxui/plugin-dns01/main/docs/screenshots/2-checks.png",
+      "caption": {
+        "en": "Adjust how DNS records are checked before validation",
+        "zh_CN": "调整验证前对 DNS 记录的检查方式",
+        "zh_TW": "調整驗證前對 DNS 記錄的檢查方式",
+        "ja_JP": "検証前の DNS レコードの確認方法を調整"
+      }
+    },
+    {
+      "url": "https://raw.githubusercontent.com/nginxui/plugin-dns01/main/docs/screenshots/3-providers.png",
+      "caption": {
+        "en": "More than 200 DNS providers to choose from",
+        "zh_CN": "可从 200 多家 DNS 服务商中选择",
+        "zh_TW": "可從 200 多家 DNS 服務商中選擇",
+        "ja_JP": "200 以上の DNS プロバイダーから選択"
+      }
+    },
+    {
+      "url": "https://raw.githubusercontent.com/nginxui/plugin-dns01/main/docs/screenshots/4-provider-fields.png",
+      "caption": {
+        "en": "Each provider asks only for the fields it needs",
+        "zh_CN": "每家服务商只需填写它需要的字段",
+        "zh_TW": "每家服務商只需填寫它需要的欄位",
+        "ja_JP": "プロバイダーごとに必要な項目だけを入力"
+      }
+    }
+  ],
   "categories": [
     "acme",
     "dns"
