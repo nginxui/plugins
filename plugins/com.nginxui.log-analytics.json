@@ -15,7 +15,7 @@
   "author": "nginx-ui",
   "repository_url": "https://github.com/nginxui/plugin-log-analytics",
   "readme_url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics/main/README.md",
-  "icon_url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics/main/webapp/public/icon.svg",
+  "icon_url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics-webapp/main/public/icon.svg",
   "categories": [
     "logs",
     "analytics"
