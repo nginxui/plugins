@@ -46,6 +46,14 @@
     "icon_url": {
       "$ref": "#/$defs/httpsUrl"
     },
+    "screenshots": {
+      "type": "array",
+      "description": "Images of the plugin in use, in display order (plugin spec PKG-29). PNG, JPEG or WebP, about 16:10 at 1280 to 1920 pixels wide.",
+      "maxItems": 8,
+      "items": {
+        "$ref": "#/$defs/screenshot"
+      }
+    },
     "categories": {
       "type": "array",
       "items": {
@@ -108,6 +116,21 @@
       "additionalProperties": {
         "type": "string",
         "minLength": 1
+      }
+    },
+    "screenshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "url"
+      ],
+      "properties": {
+        "url": {
+          "$ref": "#/$defs/httpsUrl"
+        },
+        "caption": {
+          "$ref": "#/$defs/localizedText"
+        }
       }
     },
     "httpsUrl": {

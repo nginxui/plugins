@@ -76,6 +76,12 @@ Required fields and what they mean are documented in
   must also appear in `platforms`.
 - `author_public_key` is required for a `community` entry. It is the minisign
   public key that signs `plugin.sums` in your packages.
+- `screenshots` is optional: up to eight images of the plugin in use, each an
+  `https` `url` of a PNG, JPEG or WebP file and an optional `caption` locale
+  map. About 16:10 at 1280 to 1920 pixels wide shows well. NGINX UI shows only
+  images served from your repository's GitHub host, the catalog or the host of
+  your packages, so keep them in your repository and link the raw file of a
+  release tag.
 
 ## What `.github/workflows/validate.yml` checks
 
