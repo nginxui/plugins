@@ -19,6 +19,12 @@
       "$ref": "entry.schema.json#/$defs/localizedText",
       "description": "Name of the catalog a host shows for this source (plugin-spec PKG-30)."
     },
+    "icon": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://",
+      "description": "Square image a host shows for this source (plugin-spec PKG-30)."
+    },
     "updated_at": {
       "type": "string",
       "format": "date-time"

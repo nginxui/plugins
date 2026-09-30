@@ -6,6 +6,7 @@
     "zh_TW": "NGINX UI 外掛",
     "ja_JP": "NGINX UI プラグイン"
   },
+  "icon": "https://plugins.nginxui.com/assets/icon.png",
   "updated_at": "2026-09-30T00:00:00Z",
   "plugins": [
     {

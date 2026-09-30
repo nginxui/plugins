@@ -24,6 +24,8 @@ const CATALOG_NAME = {
   zh_TW: 'NGINX UI 外掛',
   ja_JP: 'NGINX UI プラグイン',
 }
+// Image a host shows for this catalog, served next to the index.
+const CATALOG_ICON = 'https://plugins.nginxui.com/assets/icon.png'
 
 export function loadEntries() {
   const files = readdirSync(PLUGINS_DIR).filter(f => f.endsWith('.json')).sort()
@@ -75,11 +77,11 @@ export function newestReleaseTimestamp(entries) {
 export function buildIndex() {
   const plugins = loadEntries()
   const updatedAt = newestReleaseTimestamp(plugins)
-  // Key order is fixed here (schema_version, name, updated_at, plugins), so
-  // this object can be serialized directly with JSON.stringify without a
-  // separate reordering step, and two calls to buildIndex() always stringify
-  // identically.
-  const document = { schema_version: SCHEMA_VERSION, name: CATALOG_NAME }
+  // Key order is fixed here (schema_version, name, icon, updated_at,
+  // plugins), so this object can be serialized directly with JSON.stringify
+  // without a separate reordering step, and two calls to buildIndex() always
+  // stringify identically.
+  const document = { schema_version: SCHEMA_VERSION, name: CATALOG_NAME, icon: CATALOG_ICON }
   if (updatedAt)
     document.updated_at = updatedAt
   document.plugins = plugins
