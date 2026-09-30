@@ -237,7 +237,7 @@
     },
     "manifestSnapshot": {
       "type": "object",
-      "description": "Snapshot of the release's plugin.json, used by the host to show permissions and capabilities before download (internal/plugin.CatalogRelease.Manifest, protocol.Manifest). Bulky sub-documents such as dns01.providers should be omitted here; the host itself only reads permissions, capabilities, requires, api_version and min_nginx_ui_version from this snapshot.",
+      "description": "Snapshot of the release's plugin.json, used by the host to show permissions and capabilities before download (internal/plugin.CatalogRelease.Manifest, protocol.Manifest). Bulky sub-documents such as dns01.providers should be omitted here; the host itself only reads permissions, capabilities, requires, conflicts, api_version and min_nginx_ui_version from this snapshot.",
       "additionalProperties": true,
       "properties": {
         "id": {
@@ -306,6 +306,14 @@
                 "type": "string"
               }
             }
+          }
+        },
+        "conflicts": {
+          "type": "array",
+          "description": "Plugin ids that must not be enabled at the same time as this plugin (spec MAN-42).",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/pluginId"
           }
         },
         "server": {
