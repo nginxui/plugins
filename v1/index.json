@@ -30,6 +30,7 @@
       "screenshots": [
         {
           "url": "https://raw.githubusercontent.com/nginxui/plugin-dns01/main/docs/screenshots/1-credentials.png",
+          "dark_url": "https://raw.githubusercontent.com/nginxui/plugin-dns01/main/docs/screenshots/1-credentials-dark.png",
           "caption": {
             "en": "Pick a saved DNS credential when issuing a certificate",
             "zh_CN": "签发证书时选择已保存的 DNS 凭据",
@@ -39,6 +40,7 @@
         },
         {
           "url": "https://raw.githubusercontent.com/nginxui/plugin-dns01/main/docs/screenshots/2-checks.png",
+          "dark_url": "https://raw.githubusercontent.com/nginxui/plugin-dns01/main/docs/screenshots/2-checks-dark.png",
           "caption": {
             "en": "Adjust how DNS records are checked before validation",
             "zh_CN": "调整验证前对 DNS 记录的检查方式",
@@ -48,6 +50,7 @@
         },
         {
           "url": "https://raw.githubusercontent.com/nginxui/plugin-dns01/main/docs/screenshots/3-providers.png",
+          "dark_url": "https://raw.githubusercontent.com/nginxui/plugin-dns01/main/docs/screenshots/3-providers-dark.png",
           "caption": {
             "en": "More than 200 DNS providers to choose from",
             "zh_CN": "可从 200 多家 DNS 服务商中选择",
@@ -57,6 +60,7 @@
         },
         {
           "url": "https://raw.githubusercontent.com/nginxui/plugin-dns01/main/docs/screenshots/4-provider-fields.png",
+          "dark_url": "https://raw.githubusercontent.com/nginxui/plugin-dns01/main/docs/screenshots/4-provider-fields-dark.png",
           "caption": {
             "en": "Each provider asks only for the fields it needs",
             "zh_CN": "每家服务商只需填写它需要的字段",
