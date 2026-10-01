@@ -65,9 +65,8 @@ For each entry, nginx-ui picks the newest release whose `api_version` it
 speaks, whose `platforms` list (or `"any"`) covers the host, and whose
 `min_nginx_ui_version` the running version satisfies. A release may publish a
 single portable package (`download_url`), one package per platform
-(`downloads`, keyed by `"<goos>-<goarch>"` or `"any"`), or both — see
-[RFC 0001](https://github.com/nginxui/plugin-spec/blob/main/spec/rfcs/0001-per-platform-packages.md)
-in `plugin-spec`. The host picks `downloads[<its platform>]`, then
+(`downloads`, keyed by `"<goos>-<goarch>"` or `"any"`), or both, see
+[Packaging](https://nginxui.com/plugin/packaging). The host picks `downloads[<its platform>]`, then
 `downloads["any"]`, then falls back to the portable package. Before
 installing the selected package, the host:
 
@@ -177,7 +176,7 @@ be broken or unsafe). In short:
   before a plugin using it can be listed, so two plugins never silently claim
   the same vendor. See `scripts/generate-codes.mjs`.
 
-These rules mirror `plugin-spec/spec/11-naming.md`.
+These rules follow [Naming](https://nginxui.com/plugin/naming) in the developer guide.
 
 ## Local development
 

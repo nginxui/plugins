@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Regenerate codes.json, the shared registry of dns01 provider codes
-// (spec/11-naming.md NAME-4..NAME-6), from a plugin's plugin.json.
+// (https://nginxui.com/plugin/naming), from a plugin's plugin.json.
 //
 // Usage:
 //   node scripts/generate-codes.mjs <path-or-url-to-plugin.json> [--check]
@@ -81,7 +81,7 @@ async function main() {
     }
     const current = next[code]
     if (current && current.owner !== ownerId) {
-      // NAME-4: a code is a shared namespace, only the registered owner may
+      // A code is a shared namespace, only the registered owner may
       // update its entry.
       conflicts.push(`code ${JSON.stringify(code)} is already registered to ${current.owner}, cannot reassign to ${ownerId}`)
       continue

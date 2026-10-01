@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Prints the URL of the package a host running <platform> would install for
 // one plugins/<id>.json's newest release, following the same selection order
-// as internal/plugin.CatalogRelease.DownloadFor in nginx-ui (RFC 0001
-// PKG-15): downloads[platform], then downloads["any"], then the portable
+// as internal/plugin.CatalogRelease.DownloadFor in nginx-ui:
+// downloads[platform], then downloads["any"], then the portable
 // download_url when "platforms" is empty or covers the platform.
 //
 // Used by .github/workflows/validate.yml's lint-conformance job, which runs
@@ -21,7 +21,7 @@ function newestRelease(entry) {
   return [...(entry.releases ?? [])].sort((a, b) => compareSemver(a.version, b.version)).at(-1)
 }
 
-/** Mirrors CatalogRelease.DownloadFor's selection order (PKG-15): the exact
+/** Mirrors CatalogRelease.DownloadFor's selection order: the exact
  * platform, then "any", then the portable package if platforms allows it. */
 export function selectDownloadUrl(release, platform) {
   for (const key of [platform, 'any']) {

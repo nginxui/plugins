@@ -48,7 +48,7 @@
     },
     "screenshots": {
       "type": "array",
-      "description": "Images of the plugin in use, in display order (plugin spec PKG-29). PNG, JPEG or WebP, about 16:10 at 1280 to 1920 pixels wide.",
+      "description": "Images of the plugin in use, in display order. PNG, JPEG or WebP, about 16:10 at 1280 to 1920 pixels wide.",
       "maxItems": 8,
       "items": {
         "$ref": "#/$defs/screenshot"
@@ -96,7 +96,7 @@
       "type": "string",
       "pattern": "^[a-z0-9]+(\\.[a-z0-9-]+)+$",
       "maxLength": 64,
-      "description": "Reverse-DNS style id (spec NAME-1). com.nginxui.* is reserved for official plugins (NAME-2); authors without a domain use io.github.<owner>.<name> (NAME-3)."
+      "description": "Reverse-DNS style id. com.nginxui.* is reserved for official plugins; authors without a domain use io.github.<owner>.<name>."
     },
     "locale": {
       "type": "string",
@@ -157,7 +157,7 @@
         "production",
         "beta"
       ],
-      "description": "Maturity label shown next to the plugin. It does not change the channel of any release (PKG-28)."
+      "description": "Maturity label shown next to the plugin. It does not change the channel of any release."
     },
     "semver": {
       "type": "string",
@@ -167,7 +167,7 @@
     "platform": {
       "type": "string",
       "pattern": "^([a-z0-9]+-[a-z0-9]+|any)$",
-      "description": "\"<goos>-<goarch>\" (e.g. \"linux-amd64\") as Go spells them, or \"any\" for a platform-independent package. Matches schema/catalog.schema.json's platformKey in plugin-spec (NAME-9)."
+      "description": "\"<goos>-<goarch>\" (e.g. \"linux-amd64\") as Go spells them, or \"any\" for a platform-independent package. Matches schema/catalog.schema.json's platformKey in plugin-spec."
     },
     "sha256": {
       "type": "string",
@@ -180,7 +180,7 @@
       "required": [
         "url"
       ],
-      "description": "RFC 0001 PKG-14: one per-platform package of a release, an entry of \"downloads\".",
+      "description": "One per-platform package of a release, an entry of \"downloads\".",
       "properties": {
         "url": {
           "$ref": "#/$defs/httpsUrl"
@@ -209,7 +209,7 @@
           ]
         }
       ],
-      "description": "RFC 0001: a release needs at least one of download_url (the portable package) or downloads (per-platform packages); both may be present.",
+      "description": "A release needs at least one of download_url (the portable package) or downloads (per-platform packages); both may be present.",
       "properties": {
         "version": {
           "$ref": "#/$defs/semver"
@@ -243,7 +243,7 @@
             "$ref": "#/$defs/download"
           },
           "minProperties": 1,
-          "description": "RFC 0001 PKG-14: per-platform packages, keyed by \"<goos>-<goarch>\" or \"any\". A host picks downloads[platform], then downloads[\"any\"], then the portable package (PKG-15)."
+          "description": "Per-platform packages, keyed by \"<goos>-<goarch>\" or \"any\". A host picks downloads[platform], then downloads[\"any\"], then the portable package."
         },
         "download_url": {
           "$ref": "#/$defs/httpsUrl",
@@ -265,7 +265,7 @@
             "beta",
             "dev"
           ],
-          "description": "RFC 0019 PKG-28: the release channel, from the most to the least stable. Without it a host infers the channel from the version: no prerelease part is stable, a prerelease starting with alpha, dev, nightly, snapshot, canary or preview is dev, any other prerelease (beta, rc, pre) is beta. Set it only to put a plain version on a less stable channel."
+          "description": "The release channel, from the most to the least stable. Without it a host infers the channel from the version: no prerelease part is stable, a prerelease starting with alpha, dev, nightly, snapshot, canary or preview is dev, any other prerelease (beta, rc, pre) is beta. Set it only to put a plain version on a less stable channel."
         },
         "manifest": {
           "$ref": "#/$defs/manifestSnapshot"
@@ -291,7 +291,7 @@
         },
         "i18n": {
           "type": "object",
-          "description": "Translations of name and description keyed by locale (spec MAN-40). The release workflow may fill the entry's name and description maps from it.",
+          "description": "Translations of name and description keyed by locale. The release workflow may fill the entry's name and description maps from it.",
           "propertyNames": {
             "$ref": "#/$defs/locale"
           },
@@ -347,7 +347,7 @@
         },
         "conflicts": {
           "type": "array",
-          "description": "Plugin ids that must not be enabled at the same time as this plugin (spec MAN-42).",
+          "description": "Plugin ids that must not be enabled at the same time as this plugin.",
           "uniqueItems": true,
           "items": {
             "$ref": "#/$defs/pluginId"
@@ -361,7 +361,7 @@
             "resources": {
               "type": "object",
               "additionalProperties": false,
-              "description": "Resource hints of the manifest (spec MAN-39).",
+              "description": "Resource hints of the manifest.",
               "properties": {
                 "memory_mb": {
                   "type": "integer",

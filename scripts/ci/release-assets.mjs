@@ -1,13 +1,13 @@
 // Discovers a GitHub release's package assets — the portable
 // "<id>-<version>.tar.gz" and/or the per-platform
-// "<id>-<version>-<goos>-<goarch>.tar.gz" files RFC 0001 added — and turns
+// "<id>-<version>-<goos>-<goarch>.tar.gz" files — and turns
 // the per-platform ones into a catalog release's "downloads" map. Shared by
 // scripts/ci/poll-releases.mjs and scripts/ci/submit-issue.mjs so a release
 // picked up automatically is shaped the same way whether it ships one
 // package or one per platform.
 //
-// See plugin-spec/spec/rfcs/0001-per-platform-packages.md and the
-// packaging done by build.sh in a plugin such as plugin-dns01.
+// See https://nginxui.com/plugin/packaging and the packaging done by build.sh in a
+// plugin such as plugin-dns01.
 
 const SHA256_HEX = /\b([0-9a-f]{64})\b/i
 
@@ -64,7 +64,7 @@ async function fetchAssetText(url, token) {
 }
 
 /**
- * Builds the "downloads" map (RFC 0001 PKG-14) for a release from its GitHub
+ * Builds the "downloads" map for a release from its GitHub
  * assets: one entry per per-platform archive found, each with its "url" and
  * the digest read from the archive's small ".sha256" sidecar asset. That is
  * the file plugin-dns01/README.md's Packaging section describes as

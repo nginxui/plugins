@@ -27,9 +27,9 @@ export function platformsFromManifest(manifest) {
  * content paths). The host (internal/plugin.Marketplace) only reads
  * permissions, capabilities, requires and the two version fields from this
  * snapshot; everything else here is kept only because it is small and useful
- * for a human reading the catalog entry. That includes the i18n block
- * (spec MAN-40), which localizedTextFromManifest turns into the name and
- * description maps of the entry. */
+ * for a human reading the catalog entry. That includes the i18n block,
+ * which localizedTextFromManifest turns into the name and description maps
+ * of the entry. */
 export function trimManifestSnapshot(manifest) {
   const snapshot = { ...manifest }
 
@@ -44,8 +44,8 @@ export function trimManifestSnapshot(manifest) {
 }
 
 /** The name and description locale maps of a catalog entry, filled from the
- * top level fields of plugin.json as "en" and from its i18n block (spec
- * MAN-40) for every other locale. An empty translation is left out, so the
+ * top level fields of plugin.json as "en" and from its i18n block for every
+ * other locale. An empty translation is left out, so the
  * host falls back to English for it. */
 export function localizedTextFromManifest(manifest) {
   const name = { en: manifest.name }

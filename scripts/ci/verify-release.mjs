@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Downloads every package of a plugin entry's newest release (the portable
-// "<id>-<version>.tar.gz" and/or the per-platform packages RFC 0001 added,
+// "<id>-<version>.tar.gz" and/or the per-platform packages,
 // "<id>-<version>-<goos>-<goarch>.tar.gz" under "downloads"), checks it
 // against its catalog sha256, extracts it and checks the signature files it
 // carries at its root:
@@ -384,7 +384,7 @@ async function main() {
   console.log(`verifying ${entry.id} ${release.version} (trust: ${entry.trust})`)
 
   // A release may publish the portable package, per-platform packages, or
-  // both (RFC 0001). Every package it lists is verified.
+  // both. Every package it lists is verified.
   const packages = []
   if (release.download_url)
     packages.push(['portable', { url: release.download_url, sha256: release.sha256 }])

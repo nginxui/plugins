@@ -1,5 +1,5 @@
 // Decides which GitHub Releases a catalog entry still lacks and which release
-// channel a new catalog release gets (RFC 0019, PKG-28). Pure functions, kept
+// channel a new catalog release gets. Pure functions, kept
 // apart from scripts/ci/poll-releases.mjs so they can be tested without the
 // network.
 

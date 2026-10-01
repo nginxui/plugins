@@ -134,7 +134,7 @@ jobs:
             [ -z "${file}" ] && continue
             id=$(node -e "console.log(JSON.parse(require('fs').readFileSync('${file}','utf8')).id)")
             # This runner is linux-amd64: select the same package a
-            # linux-amd64 nginx-ui host would install (RFC 0001 PKG-15),
+            # linux-amd64 nginx-ui host would install,
             # whether the release ships one portable package, one per
             # platform, or both.
             if ! url=$(node scripts/ci/select-download.mjs "${file}" linux-amd64); then

@@ -103,7 +103,7 @@ function checkIdUniqueness(entries) {
     ok('every plugin id is unique')
 }
 
-/** NAME-1/NAME-2: an author without the com.nginxui.* namespace must not
+/** Naming policy: an author without the com.nginxui.* namespace must not
  * claim it, and io.github.<owner>.<name> ids must be owned by that GitHub
  * user (best-effort: checked against the repository_url host+owner). */
 function checkNamingPolicy(entries) {
@@ -125,7 +125,7 @@ function checkNamingPolicy(entries) {
       }
     }
   }
-  ok('naming policy (NAME-1/NAME-2/NAME-3)')
+  ok('naming policy')
 }
 
 /** A community package signs its plugin.sums with the author's own key, and
@@ -140,7 +140,7 @@ function checkAuthorKeys(entries) {
   ok('every community entry has an author_public_key')
 }
 
-/** RFC 0001 PKG-14/PKG-15: a release needs at least one of "downloads" or
+/** A release needs at least one of "downloads" or
  * "download_url" (the schema's anyOf already enforces this structurally;
  * repeated here for a clearer message, matching this file's existing style
  * for cross-field checks the minimal schema validator cannot express on its
@@ -170,7 +170,7 @@ function checkDownloadsPlatforms(entries) {
   ok('downloads keys are valid platform keys and are summarized in platforms')
 }
 
-/** NAME-4: a dns01 provider code is a shared namespace, registered once in
+/** A dns01 provider code is a shared namespace, registered once in
  * codes.json. This only checks entries whose manifest snapshot still carries
  * dns01.providers (a large plugin like com.nginxui.dns01 strips it from the
  * snapshot to keep the catalog small; codes.json for that plugin is instead
