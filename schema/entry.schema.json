@@ -128,6 +128,10 @@
         "url": {
           "$ref": "#/$defs/httpsUrl"
         },
+        "dark_url": {
+          "$ref": "#/$defs/httpsUrl",
+          "description": "The same view in the dark theme, at the size of url. Hosts show url when it is absent."
+        },
         "caption": {
           "$ref": "#/$defs/localizedText"
         }

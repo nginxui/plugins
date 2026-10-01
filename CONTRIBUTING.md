@@ -78,7 +78,9 @@ Required fields and what they mean are documented in
   public key that signs `plugin.sums` in your packages.
 - `screenshots` is optional: up to eight images of the plugin in use, each an
   `https` `url` of a PNG, JPEG or WebP file and an optional `caption` locale
-  map. About 16:10 at 1280 to 1920 pixels wide shows well. NGINX UI shows only
+  map. About 16:10 at 1280 to 1920 pixels wide shows well. Add `dark_url`, the
+  same view in the dark theme at the same size, and NGINX UI shows it while
+  its interface is dark; without one the `url` image shows in both themes. NGINX UI shows only
   images served from your repository's GitHub host, the catalog or the host of
   your packages, so keep them in your repository and link the raw file of a
   release tag.
