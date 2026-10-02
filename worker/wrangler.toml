@@ -1,5 +1,7 @@
 # The release webhook of the catalog, see README.md next to this file.
 name = "nginxui-plugins-release-hook"
+# The account of the catalog Pages project, so wrangler never has to ask.
+account_id = "9b281dd2ab36041a82b8b35a7a14c5de"
 main = "src/index.js"
 compatibility_date = "2026-10-01"
 # The webhook URL of the catalog GitHub App is https://plugin-hooks.nginxui.com/github.
