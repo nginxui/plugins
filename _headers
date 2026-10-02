@@ -1,5 +1,11 @@
 # Cloudflare Pages headers. The catalog and the keyring are polled by hosts,
 # a short cache keeps revocations moving; schemas change with releases only.
+# The pages show text from plugin authors, so they run no inline script and
+# load nothing but their own files and https images.
+/*
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Content-Type-Options: nosniff
 /v1/*
   Cache-Control: public, max-age=300
   X-Content-Type-Options: nosniff

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// Builds the site Cloudflare Pages serves at plugins.nginxui.com: the catalog
-// v1/index.json, the partner keyring v1/partners.json, the schemas of this
-// repository and of plugin-spec, the assets and _headers. Both documents are
+// Builds the site Cloudflare Pages serves at plugins.nginxui.com: the pages
+// listing the plugins (scripts/site.mjs), the catalog v1/index.json, the
+// partner keyring v1/partners.json, the schemas of this repository and of
+// plugin-spec, the assets and _headers. Both documents are
 // checked against the schemas of plugin-spec ($PLUGIN_SPEC_DIR or a checkout
 // next to this repository). Nothing it writes is committed.
 //
@@ -52,6 +53,7 @@ import { compareSemver, isSemver } from './ci/semver.mjs'
 import { verifyRelease } from './ci/verify-release.mjs'
 import { validateAgainstSchemaFile } from './lib/schema-validator.mjs'
 import { SPEC_SCHEMAS, specSchema } from './lib/spec.mjs'
+import { renderSite } from './site.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const PLUGINS_DIR = path.join(ROOT, 'plugins')
@@ -70,7 +72,7 @@ const CATALOG_ICON = 'https://plugins.nginxui.com/assets/icon.png'
 const STATIC = ['schema', 'assets', '_headers']
 // With a 404.html Cloudflare Pages answers a missing path with 404 instead of
 // treating the site as a single page app.
-const NOT_FOUND = '<!doctype html>\n<meta charset="utf-8">\n<title>Not found</title>\n<p>Not found.</p>\n'
+const NOT_FOUND = '<!doctype html>\n<meta charset="utf-8">\n<title>Not found</title>\n<p>Not found. <a href="/">Nginx UI Plugins</a></p>\n'
 
 /** Reads plugins/*.json, sorted by id. Throws on invalid JSON, a file not
  * named <id>.json or a duplicate id; scripts/validate.mjs explains the rest. */
@@ -419,6 +421,10 @@ async function main() {
   for (const name of SPEC_SCHEMAS)
     cpSync(specSchema(name), path.join(out, 'schema', name))
   writeFileSync(path.join(out, '404.html'), NOT_FOUND)
+  for (const [file, html] of renderSite(index)) {
+    mkdirSync(path.dirname(path.join(out, file)), { recursive: true })
+    writeFileSync(path.join(out, file), html)
+  }
   writeFileSync(path.join(out, 'v1', 'index.json'), serialize(index))
   writeFileSync(path.join(out, 'v1', 'partners.json'), serializeKeyring(keyring))
 
