@@ -13,13 +13,18 @@
 // a package does not verify.
 //
 // Usage: node scripts/build-catalog.mjs [--out <dir>] [--published <url>|none]
-//          [--only <plugins/id.json>]... [--verify-newest] [--failures <file>]
+//          [--first-deploy] [--only <plugins/id.json>]... [--verify-newest]
+//          [--failures <file>]
 //
 //   --out <dir>        write the site there, default dist
 //   --published <url>  the site to read the published catalog and keyring
 //                      from, default $CATALOG_URL or https://plugins.nginxui.com.
 //                      A directory reads a site built before. "none" builds
-//                      without one, for the very first deploy.
+//                      without one, for a local build or a pull request.
+//   --first-deploy     builds without the published catalog for the first
+//                      deploy, and fails when the site already serves one: a
+//                      deploy that skipped the published catalog would no
+//                      longer pin its packages.
 //   --only <file>      build these entries only, for checking a pull request
 //   --verify-newest    also check the newest release of every built entry
 //                      when the published catalog already lists it
@@ -121,6 +126,18 @@ async function fetchPublished(site, file) {
   if (!response.ok)
     throw new Error(`GET ${url}: HTTP ${response.status}`)
   return response.json()
+}
+
+/** Whether the site serves a catalog. An unreachable site or one without a
+ * deployment does not; any answer with a document does. */
+async function servesCatalog(site) {
+  try {
+    const response = await fetch(`${site.replace(/\/+$/, '')}/v1/index.json`, { headers: { 'Cache-Control': 'no-cache' } })
+    return response.ok
+  }
+  catch {
+    return false
+  }
 }
 
 /** What reading and verifying a GitHub Release depends on: the release
@@ -330,8 +347,14 @@ async function main() {
       'only': { type: 'string', multiple: true, default: [] },
       'verify-newest': { type: 'boolean', default: false },
       'failures': { type: 'string' },
+      'first-deploy': { type: 'boolean', default: false },
     },
   })
+  if (values['first-deploy']) {
+    if (await servesCatalog(values.published))
+      throw new Error(`${values.published} already serves a catalog; --first-deploy only builds the first one`)
+    values.published = 'none'
+  }
   const failuresFile = values.failures ? path.resolve(values.failures) : null
   const failed = failuresFile && existsSync(failuresFile) ? JSON.parse(readFileSync(failuresFile, 'utf8')) : {}
   const visited = new Set()

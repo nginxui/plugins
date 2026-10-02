@@ -23,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       first_deploy:
-        description: Build without a published catalog, only for the very first deploy
+        description: Build without a published catalog, refused once the site serves one
         type: boolean
         default: false
 
@@ -83,7 +83,7 @@ jobs:
           FIRST_DEPLOY: ${{ inputs.first_deploy }}
         run: |
           if [ "${FIRST_DEPLOY}" = "true" ]; then
-            node scripts/build-catalog.mjs --out dist --failures .cache/verify-failures.json --published none
+            node scripts/build-catalog.mjs --out dist --failures .cache/verify-failures.json --first-deploy
           else
             node scripts/build-catalog.mjs --out dist --failures .cache/verify-failures.json
           fi
