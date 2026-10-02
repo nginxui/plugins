@@ -10,7 +10,8 @@ import { platformsFromManifest, trimManifestSnapshot } from './manifest-snapshot
 import { assetDigest, buildDownloadsMap, findPortableAsset } from './release-assets.mjs'
 import { channelToSet, releaseNotes, tagVersion } from './releases.mjs'
 
-/** The release record of a GitHub Release, or null after saying why it was
+/** The release record of a GitHub Release with the dns01 providers its
+ * plugin.json declares, as { release, dns01 }, or null after saying why it was
  * skipped. The digests are the ones GitHub computed for the assets; only an
  * older portable package without one is downloaded to hash it. */
 export async function releaseFromGithub(entry, repo, ghRelease, token, warn = console.warn) {
@@ -46,7 +47,7 @@ export async function releaseFromGithub(entry, repo, ghRelease, token, warn = co
       ?? createHash('sha256').update(await downloadBinary(downloadUrl, token)).digest('hex')
   }
 
-  return {
+  const release = {
     version,
     released_at: ghRelease.published_at ?? ghRelease.created_at,
     api_version: manifest.api_version,
@@ -58,6 +59,8 @@ export async function releaseFromGithub(entry, repo, ghRelease, token, warn = co
     ...releaseText(ghRelease),
     manifest: trimManifestSnapshot(manifest),
   }
+  const dns01 = (manifest.dns01?.providers ?? []).map(({ code, name }) => ({ code, name }))
+  return { release, dns01 }
 }
 
 /** The members of a release record that follow the GitHub Release on every

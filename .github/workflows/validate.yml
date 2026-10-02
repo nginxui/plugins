@@ -19,6 +19,9 @@ on:
 permissions:
   contents: read
 
+env:
+  PLUGIN_SPEC_DIR: ${{ github.workspace }}/.plugin-spec
+
 jobs:
   schema:
     name: Schema and structural checks
@@ -33,6 +36,12 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
+
+      # The catalog and keyring schemas live in the contract repository.
+      - uses: actions/checkout@v7
+        with:
+          repository: nginxui/plugin-spec
+          path: .plugin-spec
 
       - name: node --test scripts/ci/*.test.mjs
         run: node --test scripts/ci/*.test.mjs
@@ -66,6 +75,12 @@ jobs:
         with:
           node-version: "22"
 
+      # The catalog and keyring schemas live in the contract repository.
+      - uses: actions/checkout@v7
+        with:
+          repository: nginxui/plugin-spec
+          path: .plugin-spec
+
       - name: Build the changed entries
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -88,6 +103,12 @@ jobs:
         run: |
           set -e
           index="${RUNNER_TEMP}/site/v1/index.json"
+          # The plugin commands ship with the nginx-ui release that brings
+          # plugins; an older image has none to run.
+          if ! docker run --rm uozicoder/nginx-ui nginx-ui plugin --help >/dev/null 2>&1; then
+            echo "::notice title=Lint skipped::The uozicoder/nginx-ui image has no plugin command yet."
+            exit 0
+          fi
           mkdir -p /tmp/pkg
           while IFS= read -r file; do
             [ -z "${file}" ] && continue

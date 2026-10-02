@@ -29,6 +29,9 @@ on:
 permissions:
   contents: read
 
+env:
+  PLUGIN_SPEC_DIR: ${{ github.workspace }}/.plugin-spec
+
 concurrency:
   group: deploy
   cancel-in-progress: false
@@ -47,17 +50,25 @@ jobs:
         with:
           node-version: "22"
 
+      # The catalog and keyring schemas live in the contract repository.
+      - uses: actions/checkout@v7
+        with:
+          repository: nginxui/plugin-spec
+          path: .plugin-spec
+
       - run: node --test scripts/ci/*.test.mjs
 
       - run: node scripts/validate.mjs
 
-      # Releases that did not verify, so the hourly build does not download
-      # them again until their packages or the keys change. A cache entry is
-      # immutable, every run saves a new one and restores the newest.
-      - uses: actions/cache@v6
+      # Releases that were left out, so the hourly build does not read them
+      # again until the release or the keys change. A cache entry is
+      # immutable: the newest one is restored, and a new one is saved only
+      # when the content changed.
+      - id: failures
+        uses: actions/cache/restore@v6
         with:
           path: .cache/verify-failures.json
-          key: verify-failures-${{ github.run_id }}
+          key: verify-failures-
           restore-keys: verify-failures-
 
       - id: build
@@ -73,6 +84,19 @@ jobs:
           else
             node scripts/build-catalog.mjs --out dist --failures .cache/verify-failures.json
           fi
+
+      - id: failures-key
+        if: always()
+        run: |
+          if [ -f .cache/verify-failures.json ]; then
+            echo "key=verify-failures-$(sha256sum .cache/verify-failures.json | cut -c1-16)" >>"${GITHUB_OUTPUT}"
+          fi
+
+      - uses: actions/cache/save@v6
+        if: always() && steps.failures-key.outputs.key != '' && steps.failures-key.outputs.key != steps.failures.outputs.cache-matched-key
+        with:
+          path: .cache/verify-failures.json
+          key: ${{ steps.failures-key.outputs.key }}
 
       # The trusted comment is fixed for a given updated_at and Ed25519 is
       # deterministic, so an unchanged keyring gets the same signature.

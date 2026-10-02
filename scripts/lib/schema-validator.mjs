@@ -3,15 +3,17 @@
 // dependency on ajv or any other package so `node scripts/validate.mjs` runs
 // with nothing but a Node.js installation.
 //
-// Supported keywords: type, const, enum, anyOf, $ref (local "#/$defs/...",
-// a relative sibling schema file, or a pointer into one such as
-// "partner.schema.json#/$defs/name"), properties, required,
-// additionalProperties (boolean or schema), propertyNames, minProperties,
-// maxProperties, items, minItems, maxItems, uniqueItems, minLength,
-// maxLength, pattern, minimum, maximum, format ("uri", "date-time", "date").
+// Supported keywords: type, const, enum, anyOf, allOf, oneOf, not,
+// if/then/else, $ref (local "#/$defs/...", a relative sibling schema file, or
+// a pointer into one such as "partner.schema.json#/$defs/name"), properties,
+// required, dependentRequired, additionalProperties (boolean or schema),
+// propertyNames, minProperties, maxProperties, items, contains, minItems,
+// maxItems, uniqueItems, minLength, maxLength, pattern, minimum, maximum,
+// format ("uri", "date-time", "date").
 //
-// Anything else (title, description, $schema, $id, ...) is read for
-// documentation but never affects validation.
+// Annotations (title, description, $schema, $id, ...) never affect
+// validation. Any other keyword throws, so a schema never passes data by
+// silently skipping a rule this validator does not know.
 
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -96,6 +98,24 @@ function matchesType(value, type) {
  * `errors`. `instancePath` is a JSON-Pointer-ish path used only for error
  * messages.
  */
+const KEYWORDS = new Set([
+  // Annotations.
+  '$schema', '$id', '$defs', '$comment', 'title', 'description', 'default', 'examples', 'deprecated', 'readOnly', 'writeOnly',
+  // Validation.
+  '$ref', 'type', 'const', 'enum', 'anyOf', 'allOf', 'oneOf', 'not', 'if', 'then', 'else',
+  'properties', 'required', 'dependentRequired', 'additionalProperties', 'propertyNames', 'minProperties', 'maxProperties',
+  'items', 'contains', 'minItems', 'maxItems', 'uniqueItems', 'minLength', 'maxLength', 'pattern', 'minimum', 'maximum', 'format',
+])
+
+const FORMATS = new Set(['uri', 'date-time', 'date'])
+
+/** Whether data matches schema, errors discarded. */
+function matches(schema, data, ctx, instancePath) {
+  const errors = []
+  validateNode(schema, data, ctx, instancePath, errors)
+  return errors.length === 0
+}
+
 function validateNode(schema, data, ctx, instancePath, errors) {
   if (typeof schema === 'boolean') {
     if (schema === false)
@@ -103,13 +123,40 @@ function validateNode(schema, data, ctx, instancePath, errors) {
     return
   }
 
+  for (const keyword of Object.keys(schema)) {
+    if (!KEYWORDS.has(keyword))
+      throw new Error(`schema keyword ${JSON.stringify(keyword)} is not supported by scripts/lib/schema-validator.mjs`)
+  }
+  if (schema.format !== undefined && !FORMATS.has(schema.format))
+    throw new Error(`schema format ${JSON.stringify(schema.format)} is not supported by scripts/lib/schema-validator.mjs`)
+
+  // Keywords next to $ref apply as well.
   if (schema.$ref) {
     const { schema: resolved, ctx: nextCtx } = resolveRef(schema.$ref, ctx)
     validateNode(resolved, data, nextCtx, instancePath, errors)
-    return
   }
 
   const label = instancePath || '/'
+
+  if (schema.allOf) {
+    for (const sub of schema.allOf)
+      validateNode(sub, data, ctx, instancePath, errors)
+  }
+
+  if (schema.oneOf) {
+    const count = schema.oneOf.filter(sub => matches(sub, data, ctx, instancePath)).length
+    if (count !== 1)
+      errors.push(`${label}: must match exactly one schema in oneOf, matches ${count}`)
+  }
+
+  if (schema.not !== undefined && matches(schema.not, data, ctx, instancePath))
+    errors.push(`${label}: must not match the schema in not`)
+
+  if (schema.if !== undefined) {
+    const branch = matches(schema.if, data, ctx, instancePath) ? schema.then : schema.else
+    if (branch !== undefined)
+      validateNode(branch, data, ctx, instancePath, errors)
+  }
 
   if ('const' in schema && data !== schema.const)
     errors.push(`${label}: must equal ${JSON.stringify(schema.const)}, got ${JSON.stringify(data)}`)
@@ -184,6 +231,8 @@ function validateNode(schema, data, ctx, instancePath, errors) {
         validateNode(schema.items, item, ctx, `${instancePath}[${i}]`, errors)
       })
     }
+    if (schema.contains !== undefined && !data.some((item, i) => matches(schema.contains, item, ctx, `${instancePath}[${i}]`)))
+      errors.push(`${label}: must contain an item matching the schema in contains`)
   }
 
   if (type === 'object') {
@@ -201,12 +250,22 @@ function validateNode(schema, data, ctx, instancePath, errors) {
       }
     }
 
+    if (schema.dependentRequired) {
+      for (const [key, needed] of Object.entries(schema.dependentRequired)) {
+        if (!(key in data))
+          continue
+        for (const req of needed) {
+          if (!(req in data))
+            errors.push(`${label}: property "${key}" requires "${req}"`)
+        }
+      }
+    }
+
     if (schema.propertyNames) {
       for (const key of keys)
         validateNode(schema.propertyNames, key, ctx, `${label} (property name "${key}")`, errors)
     }
 
-    const declared = schema.properties ? Object.keys(schema.properties) : []
     for (const key of keys) {
       if (schema.properties && key in schema.properties) {
         validateNode(schema.properties[key], data[key], ctx, `${instancePath}/${key}`, errors)
@@ -220,7 +279,6 @@ function validateNode(schema, data, ctx, instancePath, errors) {
         validateNode(schema.additionalProperties, data[key], ctx, `${instancePath}/${key}`, errors)
       }
     }
-    void declared
   }
 }
 

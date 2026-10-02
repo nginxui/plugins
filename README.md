@@ -14,7 +14,8 @@ plugins/<id>.json     One JSON file per plugin: what it is, where it is
 partners/<name>.json  One JSON file per partner organization: its minisign
                        public key, an optional expiry, and whether it is
                        revoked. The source of the partner keyring.
-schema/               JSON Schema (draft 2020-12) for every file shape.
+schema/               JSON Schema (draft 2020-12) of the files written here:
+                       entry.schema.json and partner.schema.json.
 assets/, _headers     Served as they are: the catalog icon and the cache and
                        content type headers of Cloudflare Pages.
 worker/               The release webhook, a Cloudflare Worker that starts
@@ -34,7 +35,9 @@ v1/index.json         The catalog: plugins/*.json with the releases read from
 v1/partners.json      The partner keyring built from partners/*.json, signed
                        with the official plugin key into
                        v1/partners.json.minisig.
-schema/, assets/      Copied from the repository.
+schema/               The schemas of this repository and the catalog,
+                       partners and plugin schemas of nginxui/plugin-spec.
+assets/               Copied from the repository.
 ```
 
 ## How nginx-ui hosts consume this
@@ -90,9 +93,18 @@ installed, the release webhook in `worker/` starts the deploy right away, see
 {
   "schema_version": 1,
   "updated_at": "2026-09-22T00:00:00Z",
-  "plugins": [ /* CatalogEntry, see schema/entry.schema.json */ ]
+  "plugins": [ /* entries, see catalog.schema.json in nginxui/plugin-spec */ ]
 }
 ```
+
+The [plugin-spec](https://github.com/nginxui/plugin-spec) repository holds
+the schemas of the catalog and the keyring; the build checks both documents
+against them. The `manifest` of a release is a snapshot of the `plugin.json`
+members a host reads before the install, and an entry lists what its newest
+release `provides`: its dns01 providers under the plugin version since which
+the plugin provides dns01, with a version of its own on a provider added
+later, and `removed_in` on one a newer release dropped while the newest
+stable release still has it.
 
 For each entry, nginx-ui picks the newest release whose `api_version` it
 speaks, whose `platforms` list (or `"any"`) covers the host, and whose
@@ -207,7 +219,9 @@ These rules follow [Naming](https://nginxui.com/plugin/naming) in the developer 
 
 ## Local development
 
-Requires Node.js >= 20, no dependencies to install.
+Requires Node.js >= 20 and a checkout of
+[nginxui/plugin-spec](https://github.com/nginxui/plugin-spec) next to this
+repository (or `PLUGIN_SPEC_DIR`), no dependencies to install.
 
 ```sh
 node scripts/validate.mjs                    # schema and structural checks
@@ -222,8 +236,8 @@ policy above holds, that every entry is released on GitHub, that every
 `partners/<name>.json` matches `schema/partner.schema.json` with a key no
 other partner uses and a reason on every revocation, and that the keyring
 builds. `scripts/build-catalog.mjs` checks the releases and the built
-documents against `schema/catalog.schema.json` and
-`schema/partners.schema.json`; `--published none` builds without the
+documents against the catalog and partners schemas of plugin-spec;
+`--published none` builds without the
 published catalog, and `--published <dir>` compares with a site built
 before.
 

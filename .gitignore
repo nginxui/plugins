@@ -25,3 +25,4 @@ plugin.key
 /v1/
 /.cache/
 /worker/.wrangler/
+/.plugin-spec/

@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Builds the site Cloudflare Pages serves at plugins.nginxui.com: the catalog
-// v1/index.json, the partner keyring v1/partners.json, the schemas, the assets
-// and _headers. Nothing it writes is committed.
+// v1/index.json, the partner keyring v1/partners.json, the schemas of this
+// repository and of plugin-spec, the assets and _headers. Both documents are
+// checked against the schemas of plugin-spec ($PLUGIN_SPEC_DIR or a checkout
+// next to this repository). Nothing it writes is committed.
 //
 // The releases of each plugins/<id>.json come from the GitHub Releases of its
 // repository_url. The published catalog is the record of what was listed
@@ -21,10 +23,10 @@
 //   --only <file>      build these entries only, for checking a pull request
 //   --verify-newest    also check the newest release of every built entry
 //                      when the published catalog already lists it
-//   --failures <file>  remembers the releases that did not verify, so one is
-//                      only downloaded again once its packages or the key it
-//                      is checked against change. CI keeps the file in its
-//                      cache.
+//   --failures <file>  remembers the releases that were left out, so one is
+//                      only read again once the release, its packages or the
+//                      key it is checked against change. CI keeps the file in
+//                      its cache.
 //
 // Env: GITHUB_TOKEN (raises the API rate limit), PLUGIN_SIGNING_PUBLIC_KEY (the
 // official plugin key, see verify-release.mjs). Writes changed=true|false to
@@ -39,15 +41,15 @@ import { parseArgs } from 'node:util'
 import { buildKeyring, serializeKeyring } from './build-partners.mjs'
 import { listReleases, parseGithubRepoUrl } from './ci/github.mjs'
 import { changedDigests, releaseFromGithub, releaseText } from './ci/release-record.mjs'
-import { keepRecentNotes, sortReleases, tagVersion } from './ci/releases.mjs'
-import { isSemver } from './ci/semver.mjs'
+import { assetDigest, findPlatformAssets, findPortableAsset } from './ci/release-assets.mjs'
+import { inferChannel, keepRecentNotes, sortReleases, tagVersion } from './ci/releases.mjs'
+import { compareSemver, isSemver } from './ci/semver.mjs'
 import { verifyRelease } from './ci/verify-release.mjs'
 import { validateAgainstSchemaFile } from './lib/schema-validator.mjs'
+import { SPEC_SCHEMAS, specSchema } from './lib/spec.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const PLUGINS_DIR = path.join(ROOT, 'plugins')
-const CATALOG_SCHEMA = path.join(ROOT, 'schema', 'catalog.schema.json')
-const KEYRING_SCHEMA = path.join(ROOT, 'schema', 'partners.schema.json')
 const DEFAULT_SITE = 'https://plugins.nginxui.com'
 const SCHEMA_VERSION = 1
 // Name a host shows for this catalog as the source of its plugins.
@@ -61,6 +63,9 @@ const CATALOG_NAME = {
 const CATALOG_ICON = 'https://plugins.nginxui.com/assets/icon.png'
 // Files and directories of the repository the site serves as they are.
 const STATIC = ['schema', 'assets', '_headers']
+// With a 404.html Cloudflare Pages answers a missing path with 404 instead of
+// treating the site as a single page app.
+const NOT_FOUND = '<!doctype html>\n<meta charset="utf-8">\n<title>Not found</title>\n<p>Not found.</p>\n'
 
 /** Reads plugins/*.json, sorted by id. Throws on invalid JSON, a file not
  * named <id>.json or a duplicate id; scripts/validate.mjs explains the rest. */
@@ -118,23 +123,25 @@ async function fetchPublished(site, file) {
   return response.json()
 }
 
-/** What a verification of record depends on: its packages and the key the
- * entry is checked against. A release that failed is checked again only when
- * this changes. */
-function verificationFingerprint(entry, record) {
-  const packages = [
-    ...(record.download_url ? [[record.download_url, record.sha256]] : []),
-    ...Object.values(record.downloads ?? {}).map(download => [download.url, download.sha256]),
-  ].sort()
+/** What reading and verifying a GitHub Release depends on: the release
+ * itself (an edit moves its updated_at), its packages and the key the entry is
+ * checked against. Taken from the release listing alone, so a release that
+ * failed before costs no request until one of them changes. */
+function releaseFingerprint(entry, ghRelease, version) {
+  const portable = findPortableAsset(ghRelease.assets, entry.id, version)
+  const packages = [...(portable ? [portable] : []), ...findPlatformAssets(ghRelease.assets, entry.id, version).values()]
+    .map(asset => [asset.name, assetDigest(asset) ?? `${asset.id}:${asset.updated_at}`])
+    .sort()
   const keys = [entry.trust, entry.author_public_key ?? '', process.env.PLUGIN_SIGNING_PUBLIC_KEY ?? '']
-  return createHash('sha256').update(JSON.stringify([packages, keys])).digest('hex')
+  return createHash('sha256').update(JSON.stringify([ghRelease.updated_at ?? '', packages, keys])).digest('hex')
 }
 
 /**
  * The releases of one entry. published is the entry of the published catalog
- * or undefined. failures maps "<id>@<version>" to the fingerprint of a
- * release that did not verify and is updated in place. Returns { releases, failures }: failures are reasons the build
- * must stop for, a release that is new and does not verify is only left out.
+ * or undefined. failed maps "<id>@<version>" to the fingerprint of a
+ * release that was left out and is updated in place. Returns
+ * { releases, provides, failures }: failures are reasons the build must stop
+ * for, a new release that cannot be read or does not verify is only left out.
  */
 async function entryReleases(entry, published, { token, verifyNewest, failed, visited }) {
   const failures = []
@@ -152,11 +159,13 @@ async function entryReleases(entry, published, { token, verifyNewest, failed, vi
   catch (err) {
     // Keep what is listed rather than emptying the entry over a network error.
     console.warn(`::warning title=${entry.id}::cannot list the releases of ${repo.owner}/${repo.repo}, keeping the published ones: ${err.message}`)
-    return { releases: [...pinned.values()], failures }
+    return { releases: [...pinned.values()], provides: published?.provides, failures }
   }
 
   const releases = []
   const seen = new Set()
+  // The dns01 providers of every release read from GitHub in this build.
+  const declared = new Map()
   for (const ghRelease of ghReleases) {
     const version = tagVersion(ghRelease.tag_name)
     if (!isSemver(version) || seen.has(version))
@@ -175,16 +184,19 @@ async function entryReleases(entry, published, { token, verifyNewest, failed, vi
       continue
     }
 
-    const record = await releaseFromGithub(entry, repo, ghRelease, token, message => console.warn(`::warning title=${entry.id}::${message}`))
-    if (!record)
-      continue
     const key = `${entry.id}@${version}`
     visited.add(key)
-    const fingerprint = verificationFingerprint(entry, record)
+    const fingerprint = releaseFingerprint(entry, ghRelease, version)
     if (failed[key] === fingerprint) {
-      console.warn(`::warning title=${entry.id}::${version} is left out, it did not verify before and nothing it depends on changed`)
+      console.warn(`::warning title=${entry.id}::${version} is left out, it failed before and neither the release nor the key changed`)
       continue
     }
+    const built = await releaseFromGithub(entry, repo, ghRelease, token, message => console.warn(`::warning title=${entry.id}::${message}`))
+    if (!built) {
+      failed[key] = fingerprint
+      continue
+    }
+    const record = built.release
     if (!await verifyRelease(entry, record)) {
       failed[key] = fingerprint
       console.warn(`::warning title=${entry.id}::${version} is left out, a package does not verify`)
@@ -192,6 +204,7 @@ async function entryReleases(entry, published, { token, verifyNewest, failed, vi
     }
     delete failed[key]
     releases.push(record)
+    declared.set(version, built.dns01)
   }
 
   const sorted = sortReleases(releases)
@@ -206,7 +219,84 @@ async function entryReleases(entry, published, { token, verifyNewest, failed, vi
     else
       delete release.yanked
   }
-  return { releases: keepRecentNotes(sorted).map(ordered), failures }
+  return { releases: keepRecentNotes(sorted).map(ordered), provides: providesOf(sorted, declared, published?.provides), failures }
+}
+
+/** Whether a published provides lists code as present in version. */
+function publishedPresence(published) {
+  const dns01 = published?.dns01
+  const ranges = new Map((dns01?.providers ?? []).map(provider => [provider.code, {
+    name: provider.name,
+    since: provider.since ?? dns01.since,
+    removedIn: provider.removed_in,
+  }]))
+  return {
+    ranges,
+    has(code, version) {
+      const range = ranges.get(code)
+      return Boolean(range) && compareSemver(range.since, version) <= 0
+        && (!range.removedIn || compareSemver(version, range.removedIn) < 0)
+    },
+  }
+}
+
+function isStable(release) {
+  return !release.yanked && (release.channel ?? inferChannel(release.version)) === 'stable'
+}
+
+/**
+ * The dns01 providers of the plugin. A provider is listed from the newest
+ * unbroken run of releases that declare it: since is the first release of
+ * the run, removed_in the release after it when the run stops before the
+ * newest. A dropped provider stays listed only while the newest stable
+ * release still has it. dns01.since is the earliest since, and a provider
+ * repeats its since only when it differs. declared holds the providers of
+ * the releases read in this build; for the others the published provides
+ * tells.
+ */
+export function providesOf(releases, declared, published) {
+  if (releases.length === 0)
+    return undefined
+  const previous = publishedPresence(published)
+  const names = new Map([...previous.ranges].map(([code, range]) => [code, range.name]))
+  for (const release of releases) {
+    for (const provider of declared.get(release.version) ?? [])
+      names.set(provider.code, provider.name)
+  }
+  const has = (code, release) => {
+    const codes = declared.get(release.version)
+    return codes ? codes.some(provider => provider.code === code) : previous.has(code, release.version)
+  }
+  const newestStable = releases.findLast(isStable)
+
+  const providers = []
+  for (const [code, name] of names) {
+    let last = releases.length - 1
+    while (last >= 0 && !has(code, releases[last]))
+      last--
+    if (last < 0)
+      continue
+    let first = last
+    while (first > 0 && has(code, releases[first - 1]))
+      first--
+    const removedIn = releases[last + 1]?.version
+    if (removedIn && newestStable && compareSemver(newestStable.version, removedIn) >= 0)
+      continue
+    providers.push({ code, name, since: releases[first].version, ...(removedIn ? { removed_in: removedIn } : {}) })
+  }
+  if (providers.length === 0)
+    return undefined
+
+  providers.sort((a, b) => (a.code < b.code ? -1 : a.code > b.code ? 1 : 0))
+  const since = providers.map(provider => provider.since).reduce((a, b) => (compareSemver(a, b) <= 0 ? a : b))
+  return {
+    dns01: {
+      since,
+      providers: providers.map(({ since: own, ...provider }) => (own === since
+        ? provider
+        : { code: provider.code, name: provider.name, since: own, ...(provider.removed_in ? { removed_in: provider.removed_in } : {}) })),
+    },
+  }
 }
 
 // Member order of a release record, so a kept and a new record serialize alike.
@@ -221,10 +311,11 @@ function ordered(release) {
   return out
 }
 
-/** The catalog entry: the source entry without yanked, with its releases. */
-function catalogEntry(entry, releases) {
+/** The catalog entry: the source entry without yanked, with what it provides
+ * and its releases. */
+function catalogEntry(entry, releases, provides) {
   const { yanked: _yanked, ...rest } = entry
-  return { ...rest, releases }
+  return { ...rest, ...(provides ? { provides } : {}), releases }
 }
 
 function serialize(document) {
@@ -259,7 +350,7 @@ async function main() {
   for (const entry of loadEntries(values.only)) {
     const result = await entryReleases(entry, publishedById.get(entry.id), { token, verifyNewest: values['verify-newest'], failed, visited })
     failures.push(...result.failures)
-    plugins.push(catalogEntry(entry, result.releases))
+    plugins.push(catalogEntry(entry, result.releases, result.provides))
     console.log(`${entry.id}: ${result.releases.map(release => release.version).join(', ') || 'no release'}`)
   }
 
@@ -271,9 +362,10 @@ async function main() {
   index.plugins = plugins
   const keyring = buildKeyring(publishedKeyring)
 
-  for (const error of validateAgainstSchemaFile(CATALOG_SCHEMA, index))
+  // The documents follow the contract in plugin-spec.
+  for (const error of validateAgainstSchemaFile(specSchema('catalog.schema.json'), index))
     failures.push(`v1/index.json: ${error}`)
-  for (const error of validateAgainstSchemaFile(KEYRING_SCHEMA, keyring))
+  for (const error of validateAgainstSchemaFile(specSchema('partners.schema.json'), keyring))
     failures.push(`v1/partners.json: ${error}`)
 
   if (failuresFile) {
@@ -301,6 +393,9 @@ async function main() {
     if (existsSync(path.join(ROOT, item)))
       cpSync(path.join(ROOT, item), path.join(out, item), { recursive: true })
   }
+  for (const name of SPEC_SCHEMAS)
+    cpSync(specSchema(name), path.join(out, 'schema', name))
+  writeFileSync(path.join(out, '404.html'), NOT_FOUND)
   writeFileSync(path.join(out, 'v1', 'index.json'), serialize(index))
   writeFileSync(path.join(out, 'v1', 'partners.json'), serializeKeyring(keyring))
 

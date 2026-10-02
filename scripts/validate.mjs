@@ -18,13 +18,13 @@ import { validateAgainstSchemaFile } from './lib/schema-validator.mjs'
 import { parsePublicKey } from './lib/minisign.mjs'
 import { buildKeyring } from './build-partners.mjs'
 import { parseGithubRepoUrl } from './ci/github.mjs'
+import { specSchema } from './lib/spec.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const PLUGINS_DIR = path.join(ROOT, 'plugins')
 const PARTNERS_DIR = path.join(ROOT, 'partners')
 const ENTRY_SCHEMA = path.join(ROOT, 'schema', 'entry.schema.json')
 const PARTNER_SCHEMA = path.join(ROOT, 'schema', 'partner.schema.json')
-const KEYRING_SCHEMA = path.join(ROOT, 'schema', 'partners.schema.json')
 
 let errorCount = 0
 
@@ -220,11 +220,11 @@ function checkKeyring() {
     fail('partners/', `the keyring cannot be built: ${err.message}`)
     return
   }
-  const schemaErrors = validateAgainstSchemaFile(KEYRING_SCHEMA, keyring)
+  const schemaErrors = validateAgainstSchemaFile(specSchema('partners.schema.json'), keyring)
   for (const e of schemaErrors)
-    fail('partners/', `the keyring does not match schema/partners.schema.json: ${e}`)
+    fail('partners/', `the keyring does not match the partners schema of plugin-spec: ${e}`)
   if (schemaErrors.length === 0)
-    ok('the partner keyring builds and matches schema/partners.schema.json')
+    ok('the partner keyring builds and matches the partners schema of plugin-spec')
 }
 
 function main() {
