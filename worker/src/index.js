@@ -13,12 +13,21 @@
 //   CATALOG_REPO            owner/name of the catalog repository
 //   DEPLOY_WORKFLOW         file name of the deploy workflow
 //   DEPLOY_REF              branch the deploy runs on
+//
+// Two limits keep a busy repository from running the deploy over and over: a
+// repository starts it at most once per COOLDOWN_SECONDS, and nothing starts
+// while a deploy is waiting to run, since that one reads the newest state when
+// it starts. GitHub runs one deploy at a time on top of that.
 
 const API = 'https://api.github.com'
 const USER_AGENT = 'nginxui-plugins-release-hook'
 // Actions that change what the catalog lists. "released" and "prereleased"
 // arrive together with "published" and add nothing.
 const RELEASE_ACTIONS = new Set(['published', 'edited', 'deleted', 'unpublished'])
+// Seconds a repository waits before its events start the deploy again.
+const COOLDOWN_SECONDS = 60
+// Run states of a deploy that has not started yet.
+const WAITING = new Set(['queued', 'pending', 'requested', 'waiting'])
 
 export default {
   async fetch(request, env) {
@@ -45,8 +54,13 @@ export default {
     const repository = payload.repository?.html_url
     if (!await isListed(env, repository))
       return text(`${repository} is not in the catalog`, 202)
+    if (!await claimCooldown(request.url, repository))
+      return text(`${repository} started the deploy less than ${COOLDOWN_SECONDS} seconds ago`, 202)
 
-    await startDeploy(env)
+    const token = await installationToken(env)
+    if (await deployWaiting(env, token))
+      return text('A deploy is already waiting to run', 202)
+    await startDeploy(env, token)
     return text(`Deploy started for ${repository}`, 202)
   },
 }
@@ -104,9 +118,31 @@ async function github(path, token, init = {}) {
   return response.status === 204 ? null : response.json()
 }
 
+/**
+ * Takes the cooldown of a repository in the cache of the data center, false
+ * when it is still running. GitHub delivers from few addresses, so its
+ * deliveries mostly meet in the same data centers. Without a cache, as in a
+ * test, nothing is limited.
+ */
+async function claimCooldown(requestUrl, repository) {
+  const cache = globalThis.caches?.default
+  if (!cache)
+    return true
+  const key = new URL(`/cooldown/${encodeURIComponent(normalizeRepository(repository))}`, requestUrl).toString()
+  if (await cache.match(key))
+    return false
+  await cache.put(key, new Response('1', { headers: { 'Cache-Control': `max-age=${COOLDOWN_SECONDS}` } }))
+  return true
+}
+
+/** Whether a run of the deploy workflow is waiting to start. */
+async function deployWaiting(env, token) {
+  const runs = await github(`/repos/${env.CATALOG_REPO}/actions/workflows/${env.DEPLOY_WORKFLOW}/runs?branch=${encodeURIComponent(env.DEPLOY_REF)}&per_page=10`, token)
+  return (runs.workflow_runs ?? []).some(run => WAITING.has(run.status))
+}
+
 /** Runs the deploy workflow of the catalog repository. */
-async function startDeploy(env) {
-  const token = await installationToken(env)
+async function startDeploy(env, token) {
   await github(`/repos/${env.CATALOG_REPO}/actions/workflows/${env.DEPLOY_WORKFLOW}/dispatches`, token, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -114,7 +150,8 @@ async function startDeploy(env) {
   })
 }
 
-/** A short lived token of the deploy App for the catalog repository. */
+/** A short lived token of the deploy App for the catalog repository, allowed
+ * to read and start its workflows. */
 async function installationToken(env) {
   const jwt = await appJwt(env.DEPLOY_APP_ID, env.DEPLOY_APP_PRIVATE_KEY)
   const installation = await github(`/repos/${env.CATALOG_REPO}/installation`, jwt)

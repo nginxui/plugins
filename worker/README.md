@@ -14,6 +14,10 @@ published catalog does not list, and runs `.github/workflows/deploy.yml`. The
 deploy reads every release from GitHub itself and verifies the packages, so a
 delivery only decides when the deploy runs.
 
+A repository starts the deploy at most once a minute, and no delivery starts
+one while a deploy is waiting to run: that deploy reads the newest releases
+when it starts.
+
 ## For plugin authors
 
 Install the [NGINX UI Plugin Catalog](https://github.com/apps/nginx-ui-plugin-catalog)

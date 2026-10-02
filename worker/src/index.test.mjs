@@ -21,10 +21,24 @@ const env = {
 const realFetch = globalThis.fetch
 afterEach(() => {
   globalThis.fetch = realFetch
+  delete globalThis.caches
 })
 
-/** Answers the catalog and the GitHub API, recording every request. */
-function fakeFetch(listed) {
+/** A cache of the data center that keeps every entry until the test ends. */
+function fakeCache() {
+  const entries = new Map()
+  globalThis.caches = {
+    default: {
+      match: async key => entries.get(String(key)),
+      put: async (key, response) => { entries.set(String(key), response) },
+    },
+  }
+  return entries
+}
+
+/** Answers the catalog and the GitHub API, recording every request. runs are
+ * the recent deploy runs GitHub lists. */
+function fakeFetch(listed, runs = [{ status: 'completed' }]) {
   const calls = []
   globalThis.fetch = async (url, init = {}) => {
     calls.push({ url: String(url), init })
@@ -35,6 +49,8 @@ function fakeFetch(listed) {
       return json({ id: 7 })
     if (url === 'https://api.github.com/app/installations/7/access_tokens')
       return json({ token: 'installation-token' })
+    if (url === 'https://api.github.com/repos/nginxui/plugins/actions/workflows/deploy.yml/runs?branch=main&per_page=10')
+      return json({ workflow_runs: runs })
     if (url === 'https://api.github.com/repos/nginxui/plugins/actions/workflows/deploy.yml/dispatches')
       return new Response(null, { status: 204 })
     return new Response('unexpected', { status: 500 })
@@ -108,3 +124,33 @@ test('only POST /github is served', async () => {
   assert.equal((await worker.fetch(new Request('https://hook.example.com/'), env)).status, 404)
   assert.equal((await worker.fetch(new Request('https://hook.example.com/github'), env)).status, 405)
 })
+
+test('nothing starts while a deploy waits to run', async () => {
+  for (const status of ['queued', 'pending', 'requested', 'waiting']) {
+    const calls = fakeFetch(['https://github.com/example/plugin'], [{ status: 'in_progress' }, { status }])
+    const response = await worker.fetch(delivery('release', released('https://github.com/example/plugin')), env)
+    assert.equal(response.status, 202)
+    assert.equal(calls.some(call => call.url.includes('/dispatches')), false, status)
+  }
+})
+
+test('a running deploy does not hold back the next one', async () => {
+  const calls = fakeFetch(['https://github.com/example/plugin'], [{ status: 'in_progress' }])
+  await worker.fetch(delivery('release', released('https://github.com/example/plugin')), env)
+  assert.equal(calls.filter(call => call.url.includes('/dispatches')).length, 1)
+})
+
+test('a repository starts the deploy once per cooldown', async () => {
+  fakeCache()
+  const calls = fakeFetch(['https://github.com/example/plugin', 'https://github.com/example/other'])
+  const dispatches = () => calls.filter(call => call.url.includes('/dispatches')).length
+  await worker.fetch(delivery('release', released('https://github.com/example/plugin')), env)
+  const again = await worker.fetch(delivery('release', released('https://github.com/Example/plugin/')), env)
+  assert.equal(again.status, 202)
+  assert.match(await again.text(), /less than 60 seconds ago/)
+  assert.equal(dispatches(), 1)
+  // Another repository has a cooldown of its own.
+  await worker.fetch(delivery('release', released('https://github.com/example/other')), env)
+  assert.equal(dispatches(), 2)
+})
+
