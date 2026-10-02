@@ -16,7 +16,9 @@
 // Two limits keep a busy repository from running the deploy over and over: a
 // repository starts it at most once per COOLDOWN_SECONDS, and nothing starts
 // while a deploy is waiting to run, since that one reads the newest state when
-// it starts. GitHub runs one deploy at a time on top of that.
+// it starts. GitHub runs one deploy at a time on top of that. A delivery is
+// handled once: the signature carries no time, so a captured one could be sent
+// again.
 
 const API = 'https://api.github.com'
 const USER_AGENT = 'nginxui-plugins-release-hook'
@@ -26,6 +28,8 @@ const USER_AGENT = 'nginxui-plugins-release-hook'
 const RELEASE_ACTIONS = new Set(['published'])
 // Seconds a repository waits before its events start the deploy again.
 const COOLDOWN_SECONDS = 60
+// Seconds a delivery id is remembered.
+const DELIVERY_SECONDS = 3600
 // Run states of a deploy that has not started yet.
 const WAITING = new Set(['queued', 'pending', 'requested', 'waiting'])
 
@@ -40,6 +44,9 @@ export default {
     const body = await request.text()
     if (!await validSignature(env.WEBHOOK_SECRET, body, request.headers.get('X-Hub-Signature-256')))
       return text('Invalid signature', 401)
+    const delivery = request.headers.get('X-GitHub-Delivery')
+    if (delivery && !await claim(request.url, `delivery/${delivery}`, DELIVERY_SECONDS))
+      return text(`Delivery ${delivery} was handled already`, 202)
 
     const event = request.headers.get('X-GitHub-Event')
     if (event === 'ping')
@@ -54,7 +61,7 @@ export default {
     const repository = payload.repository?.html_url
     if (!await isListed(env, repository))
       return text(`${repository} is not in the catalog`, 202)
-    if (!await claimCooldown(request.url, repository))
+    if (!await claim(request.url, `cooldown/${normalizeRepository(repository)}`, COOLDOWN_SECONDS))
       return text(`${repository} started the deploy less than ${COOLDOWN_SECONDS} seconds ago`, 202)
 
     const token = await installationToken(env)
@@ -119,19 +126,19 @@ async function github(path, token, init = {}) {
 }
 
 /**
- * Takes the cooldown of a repository in the cache of the data center, false
- * when it is still running. GitHub delivers from few addresses, so its
- * deliveries mostly meet in the same data centers. Without a cache, as in a
- * test, nothing is limited.
+ * Takes a name for seconds in the cache of the data center, false when it is
+ * taken already. GitHub delivers from few addresses, so its deliveries mostly
+ * meet in the same data centers. Without a cache, as in a test, every claim
+ * succeeds.
  */
-async function claimCooldown(requestUrl, repository) {
+async function claim(requestUrl, name, seconds) {
   const cache = globalThis.caches?.default
   if (!cache)
     return true
-  const key = new URL(`/cooldown/${encodeURIComponent(normalizeRepository(repository))}`, requestUrl).toString()
+  const key = new URL(`/${name.split('/').map(encodeURIComponent).join('/')}`, requestUrl).toString()
   if (await cache.match(key))
     return false
-  await cache.put(key, new Response('1', { headers: { 'Cache-Control': `max-age=${COOLDOWN_SECONDS}` } }))
+  await cache.put(key, new Response('1', { headers: { 'Cache-Control': `max-age=${seconds}` } }))
   return true
 }
 

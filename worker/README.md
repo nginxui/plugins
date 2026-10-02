@@ -16,7 +16,7 @@ delivery only decides when the deploy runs.
 
 A repository starts the deploy at most once a minute, and no delivery starts
 one while a deploy is waiting to run: that deploy reads the newest releases
-when it starts.
+when it starts. A delivery sent again is handled once.
 
 ## For plugin authors
 

@@ -58,12 +58,14 @@ function fakeFetch(listed, runs = [{ status: 'completed' }]) {
   return calls
 }
 
-function delivery(event, payload, signature) {
+let deliveries = 0
+
+function delivery(event, payload, signature, id = `delivery-${++deliveries}`) {
   const body = JSON.stringify(payload)
   return new Request('https://hook.example.com/github', {
     method: 'POST',
     body,
-    headers: { 'X-GitHub-Event': event, 'X-Hub-Signature-256': signature ?? sign(body) },
+    headers: { 'X-GitHub-Event': event, 'X-Hub-Signature-256': signature ?? sign(body), 'X-GitHub-Delivery': id },
   })
 }
 
@@ -153,5 +155,17 @@ test('a repository starts the deploy once per cooldown', async () => {
   // Another repository has a cooldown of its own.
   await worker.fetch(delivery('release', released('https://github.com/example/other')), env)
   assert.equal(dispatches(), 2)
+})
+
+test('a delivery sent again is handled once', async () => {
+  fakeCache()
+  const calls = fakeFetch(['https://github.com/example/plugin', 'https://github.com/example/other'])
+  const first = delivery('release', released('https://github.com/example/plugin'), undefined, 'same-id')
+  const replay = delivery('release', released('https://github.com/example/other'), undefined, 'same-id')
+  await worker.fetch(first, env)
+  const response = await worker.fetch(replay, env)
+  assert.equal(response.status, 202)
+  assert.match(await response.text(), /handled already/)
+  assert.equal(calls.filter(call => call.url.includes('/dispatches')).length, 1)
 })
 
