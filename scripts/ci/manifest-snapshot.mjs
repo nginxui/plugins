@@ -2,14 +2,13 @@
 // platform list and the trimmed manifest snapshot stored at
 // releases[].manifest, and the name and description locale maps.
 //
-// Shared by scripts/ci/poll-releases.mjs and scripts/ci/submit-issue.mjs so a
+// Shared by scripts/ci/release-record.mjs and scripts/ci/submit-issue.mjs so a
 // new release picked up automatically is shaped the same way a human-authored
 // entry (plugins/com.nginxui.dns01.json) is.
 
 /** A provider list this large is the dns01 plugin's own lego catalog, not
- * something worth repeating in every host's cached catalog document. Below
- * the threshold, providers stay in the snapshot so scripts/validate.mjs can
- * cross-check codes.json for a small dns01 plugin too. */
+ * something worth repeating in every host's cached catalog document. A short
+ * list stays in the snapshot for a human reading the entry. */
 const MAX_INLINE_PROVIDERS = 20
 
 /** "<goos>-<goarch>" for every key in server.executables, or ["any"] for a

@@ -1,0 +1,276 @@
+#!/usr/bin/env node
+// Builds the site Cloudflare Pages serves at plugins.nginxui.com: the catalog
+// v1/index.json, the partner keyring v1/partners.json, the schemas, the assets
+// and _headers. Nothing it writes is committed.
+//
+// The releases of each plugins/<id>.json come from the GitHub Releases of its
+// repository_url. The published catalog is the record of what was listed
+// before: a release it lists keeps its packages and digests, and the build
+// fails when GitHub now serves other digests for it. A release it does not
+// list yet is checked first (scripts/ci/verify-release.mjs) and left out when
+// a package does not verify.
+//
+// Usage: node scripts/build-catalog.mjs [--out <dir>] [--published <url>|none]
+//          [--only <plugins/id.json>]... [--verify-newest]
+//
+//   --out <dir>        write the site there, default dist
+//   --published <url>  the site to read the published catalog and keyring
+//                      from, default $CATALOG_URL or https://plugins.nginxui.com.
+//                      A directory reads a site built before. "none" builds
+//                      without one, for the very first deploy.
+//   --only <file>      build these entries only, for checking a pull request
+//   --verify-newest    also check the newest release of every built entry
+//                      when the published catalog already lists it
+//
+// Env: GITHUB_TOKEN (raises the API rate limit), PLUGIN_SIGNING_PUBLIC_KEY (the
+// official plugin key, see verify-release.mjs). Writes changed=true|false to
+// $GITHUB_OUTPUT: whether the catalog or the keyring differ from the
+// published ones.
+
+import { appendFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { parseArgs } from 'node:util'
+import { buildKeyring, serializeKeyring } from './build-partners.mjs'
+import { listReleases, parseGithubRepoUrl } from './ci/github.mjs'
+import { changedDigests, releaseFromGithub, releaseText } from './ci/release-record.mjs'
+import { keepRecentNotes, sortReleases, tagVersion } from './ci/releases.mjs'
+import { isSemver } from './ci/semver.mjs'
+import { verifyRelease } from './ci/verify-release.mjs'
+import { validateAgainstSchemaFile } from './lib/schema-validator.mjs'
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const PLUGINS_DIR = path.join(ROOT, 'plugins')
+const CATALOG_SCHEMA = path.join(ROOT, 'schema', 'catalog.schema.json')
+const KEYRING_SCHEMA = path.join(ROOT, 'schema', 'partners.schema.json')
+const DEFAULT_SITE = 'https://plugins.nginxui.com'
+const SCHEMA_VERSION = 1
+// Name a host shows for this catalog as the source of its plugins.
+const CATALOG_NAME = {
+  en: 'NGINX UI Plugins',
+  zh_CN: 'NGINX UI 插件',
+  zh_TW: 'NGINX UI 外掛',
+  ja_JP: 'NGINX UI プラグイン',
+}
+// Image a host shows for this catalog, served next to the index.
+const CATALOG_ICON = 'https://plugins.nginxui.com/assets/icon.png'
+// Files and directories of the repository the site serves as they are.
+const STATIC = ['schema', 'assets', '_headers']
+
+/** Reads plugins/*.json, sorted by id. Throws on invalid JSON, a file not
+ * named <id>.json or a duplicate id; scripts/validate.mjs explains the rest. */
+export function loadEntries(only = []) {
+  const files = only.length > 0
+    ? only.map(file => path.basename(file))
+    : readdirSync(PLUGINS_DIR).filter(f => f.endsWith('.json')).sort()
+  const entries = []
+  const seen = new Set()
+  for (const file of files) {
+    let entry
+    try {
+      entry = JSON.parse(readFileSync(path.join(PLUGINS_DIR, file), 'utf8'))
+    }
+    catch (err) {
+      throw new Error(`plugins/${file}: ${err.message}`)
+    }
+    if (file !== `${entry.id}.json`)
+      throw new Error(`plugins/${file}: "id" is ${JSON.stringify(entry.id)}, expected the file to be named ${entry.id}.json`)
+    if (seen.has(entry.id))
+      throw new Error(`duplicate plugin id ${JSON.stringify(entry.id)}`)
+    seen.add(entry.id)
+    entries.push(entry)
+  }
+  return entries.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+}
+
+/** The newest released_at of every release, so the same releases always
+ * build the same document. */
+export function newestReleaseTimestamp(plugins) {
+  let newest = ''
+  for (const plugin of plugins) {
+    for (const release of plugin.releases ?? []) {
+      if (release.released_at && release.released_at > newest)
+        newest = release.released_at
+    }
+  }
+  return newest
+}
+
+/** GET a JSON document of the published site. null when the site answers 404,
+ * a throw on any other failure: building without the published catalog would
+ * drop the digests it pins. */
+async function fetchPublished(site, file) {
+  if (!/^https?:\/\//.test(site)) {
+    const local = path.join(site, file)
+    return existsSync(local) ? JSON.parse(readFileSync(local, 'utf8')) : null
+  }
+  const url = `${site.replace(/\/+$/, '')}/${file}`
+  const response = await fetch(url, { headers: { 'Cache-Control': 'no-cache' } })
+  if (response.status === 404)
+    return null
+  if (!response.ok)
+    throw new Error(`GET ${url}: HTTP ${response.status}`)
+  return response.json()
+}
+
+/**
+ * The releases of one entry. published is the entry of the published catalog
+ * or undefined. Returns { releases, failures }: failures are reasons the build
+ * must stop for, a release that is new and does not verify is only left out.
+ */
+async function entryReleases(entry, published, { token, verifyNewest }) {
+  const failures = []
+  const pinned = new Map((published?.releases ?? []).map(release => [release.version, release]))
+  const repo = parseGithubRepoUrl(entry.repository_url)
+  if (!repo) {
+    failures.push(`${entry.id}: repository_url ${JSON.stringify(entry.repository_url)} is not a github.com repository`)
+    return { releases: [], failures }
+  }
+
+  let ghReleases
+  try {
+    ghReleases = await listReleases(repo.owner, repo.repo, token)
+  }
+  catch (err) {
+    // Keep what is listed rather than emptying the entry over a network error.
+    console.warn(`::warning title=${entry.id}::cannot list the releases of ${repo.owner}/${repo.repo}, keeping the published ones: ${err.message}`)
+    return { releases: [...pinned.values()], failures }
+  }
+
+  const releases = []
+  const seen = new Set()
+  for (const ghRelease of ghReleases) {
+    const version = tagVersion(ghRelease.tag_name)
+    if (!isSemver(version) || seen.has(version))
+      continue
+    seen.add(version)
+
+    const listed = pinned.get(version)
+    if (listed) {
+      const changes = await changedDigests(entry, listed, ghRelease, token)
+      if (changes.length > 0) {
+        failures.push(`${entry.id} ${version}: the published catalog pins other packages than ${ghRelease.html_url} now serves:\n  ${changes.join('\n  ')}`)
+        continue
+      }
+      const { notes: _notes, channel: _channel, ...kept } = listed
+      releases.push({ ...kept, ...releaseText(ghRelease) })
+      continue
+    }
+
+    const record = await releaseFromGithub(entry, repo, ghRelease, token, message => console.warn(`::warning title=${entry.id}::${message}`))
+    if (!record)
+      continue
+    if (!await verifyRelease(entry, record)) {
+      console.warn(`::warning title=${entry.id}::${version} is left out, a package does not verify`)
+      continue
+    }
+    releases.push(record)
+  }
+
+  const sorted = sortReleases(releases)
+  const newest = sorted.at(-1)
+  if (verifyNewest && newest && pinned.has(newest.version) && !await verifyRelease(entry, newest))
+    failures.push(`${entry.id} ${newest.version}: a package does not verify`)
+
+  const yanked = new Set(entry.yanked ?? [])
+  for (const release of sorted) {
+    if (yanked.has(release.version))
+      release.yanked = true
+    else
+      delete release.yanked
+  }
+  return { releases: keepRecentNotes(sorted).map(ordered), failures }
+}
+
+// Member order of a release record, so a kept and a new record serialize alike.
+const RELEASE_KEYS = ['version', 'released_at', 'api_version', 'min_nginx_ui_version', 'platforms', 'downloads', 'download_url', 'sha256', 'release_notes_url', 'notes', 'yanked', 'channel', 'manifest']
+
+function ordered(release) {
+  const out = {}
+  for (const key of RELEASE_KEYS) {
+    if (release[key] !== undefined)
+      out[key] = release[key]
+  }
+  return out
+}
+
+/** The catalog entry: the source entry without yanked, with its releases. */
+function catalogEntry(entry, releases) {
+  const { yanked: _yanked, ...rest } = entry
+  return { ...rest, releases }
+}
+
+function serialize(document) {
+  return `${JSON.stringify(document, null, 2)}\n`
+}
+
+async function main() {
+  const { values } = parseArgs({
+    options: {
+      'out': { type: 'string', default: 'dist' },
+      'published': { type: 'string', default: process.env.CATALOG_URL || DEFAULT_SITE },
+      'only': { type: 'string', multiple: true, default: [] },
+      'verify-newest': { type: 'boolean', default: false },
+    },
+  })
+  const token = process.env.GITHUB_TOKEN
+  const site = values.published === 'none' ? null : values.published
+
+  const publishedIndex = site ? await fetchPublished(site, 'v1/index.json') : null
+  const publishedKeyring = site ? await fetchPublished(site, 'v1/partners.json') : null
+  console.log(site
+    ? `published catalog: ${publishedIndex ? `${publishedIndex.plugins.length} plugin(s)` : 'none yet'} at ${site}`
+    : 'building without a published catalog')
+  const publishedById = new Map((publishedIndex?.plugins ?? []).map(plugin => [plugin.id, plugin]))
+
+  const plugins = []
+  const failures = []
+  for (const entry of loadEntries(values.only)) {
+    const result = await entryReleases(entry, publishedById.get(entry.id), { token, verifyNewest: values['verify-newest'] })
+    failures.push(...result.failures)
+    plugins.push(catalogEntry(entry, result.releases))
+    console.log(`${entry.id}: ${result.releases.map(release => release.version).join(', ') || 'no release'}`)
+  }
+
+  // Key order is fixed, so the same sources and releases build the same bytes.
+  const index = { schema_version: SCHEMA_VERSION, name: CATALOG_NAME, icon: CATALOG_ICON }
+  const updatedAt = newestReleaseTimestamp(plugins)
+  if (updatedAt)
+    index.updated_at = updatedAt
+  index.plugins = plugins
+  const keyring = buildKeyring(publishedKeyring)
+
+  for (const error of validateAgainstSchemaFile(CATALOG_SCHEMA, index))
+    failures.push(`v1/index.json: ${error}`)
+  for (const error of validateAgainstSchemaFile(KEYRING_SCHEMA, keyring))
+    failures.push(`v1/partners.json: ${error}`)
+
+  if (failures.length > 0) {
+    for (const failure of failures)
+      console.error(`::error::${failure}`)
+    process.exit(1)
+  }
+
+  const out = path.resolve(values.out)
+  rmSync(out, { recursive: true, force: true })
+  mkdirSync(path.join(out, 'v1'), { recursive: true })
+  for (const item of STATIC) {
+    if (existsSync(path.join(ROOT, item)))
+      cpSync(path.join(ROOT, item), path.join(out, item), { recursive: true })
+  }
+  writeFileSync(path.join(out, 'v1', 'index.json'), serialize(index))
+  writeFileSync(path.join(out, 'v1', 'partners.json'), serializeKeyring(keyring))
+
+  const changed = JSON.stringify(index) !== JSON.stringify(publishedIndex)
+    || JSON.stringify(keyring) !== JSON.stringify(publishedKeyring)
+  console.log(`wrote ${out} (${plugins.length} plugin(s), ${changed ? 'changed' : 'unchanged'})`)
+  if (process.env.GITHUB_OUTPUT)
+    appendFileSync(process.env.GITHUB_OUTPUT, `changed=${changed}\n`)
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((err) => {
+    console.error(err.stack || err.message || err)
+    process.exit(1)
+  })
+}

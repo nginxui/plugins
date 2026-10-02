@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { listReleases } from './github.mjs'
-import { channelToSet, inferChannel, keepRecentNotes, MAX_NOTES_LENGTH, missingReleases, releaseNotes, sortReleases, tagVersion } from './releases.mjs'
+import { channelToSet, inferChannel, keepRecentNotes, MAX_NOTES_LENGTH, releaseNotes, sortReleases, tagVersion } from './releases.mjs'
 
 const gh = (tag, extra = {}) => ({ tag_name: tag, draft: false, prerelease: false, ...extra })
 
@@ -22,32 +22,6 @@ test('channelToSet only names a channel a host could not infer', () => {
   assert.equal(channelToSet('1.0.0-nightly.1', gh('v1.0.0-nightly.1', { prerelease: true })), undefined)
   // GitHub calls it a prerelease but the version reads as stable.
   assert.equal(channelToSet('1.0.0', gh('v1.0.0', { prerelease: true })), 'beta')
-})
-
-test('missingReleases lists every version the entry lacks, oldest first', () => {
-  const entry = { releases: [{ version: '1.0.0' }, { version: '1.2.0' }] }
-  const releases = [
-    gh('v1.3.0-beta.10', { prerelease: true }),
-    gh('v1.3.0-beta.9', { prerelease: true }),
-    gh('v1.2.0'),
-    gh('v1.1.0'),
-    gh('v1.0.0'),
-    gh('v0.9.0'),
-    gh('v2.0.0', { draft: true }),
-    gh('nightly'),
-    gh('1.1.0'),
-  ]
-  const warnings = []
-  const missing = missingReleases(entry, releases, message => warnings.push(message))
-  assert.deepEqual(missing.map(release => tagVersion(release.tag_name)), ['0.9.0', '1.1.0', '1.3.0-beta.9', '1.3.0-beta.10'])
-  assert.equal(warnings.length, 1)
-  assert.match(warnings[0], /nightly/)
-})
-
-test('missingReleases is empty for an entry that lists everything', () => {
-  const entry = { releases: [{ version: '1.0.0' }] }
-  assert.deepEqual(missingReleases(entry, [gh('v1.0.0')]), [])
-  assert.deepEqual(missingReleases({}, []), [])
 })
 
 test('sortReleases orders by semantic version', () => {

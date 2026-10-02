@@ -1,30 +1,28 @@
 #!/usr/bin/env node
 // Assembles partners/*.json into v1/partners.json, the partner keyring
-// nginx-ui hosts fetch. CI signs the result with the project's release key
-// into v1/partners.json.minisig (.github/workflows/build-index.yml, see
-// docs/signing.md). Requires Node.js >= 20 and no npm dependencies.
+// nginx-ui hosts fetch. scripts/build-catalog.mjs writes it into the site and
+// CI signs it with the official plugin key into v1/partners.json.minisig
+// (.github/workflows/deploy.yml, see docs/signing.md). Requires Node.js >= 20
+// and no npm dependencies.
 //
-// Usage: node scripts/build-partners.mjs [--check]
-//
-// --check builds the keyring in memory and compares it against the committed
-// v1/partners.json instead of writing, exiting non-zero if they differ.
+// Usage: node scripts/build-partners.mjs   (prints the keyring)
 //
 // The output is deterministic. Partners are sorted by name, revoked key ids
-// are sorted, and updated_at only moves when partners or revoked change.
-// Then it is the commit time of the newest change under partners/, or the
-// build time when partners/ has uncommitted changes or that commit is not
-// newer than the published updated_at. Hosts refuse a keyring older than the
-// one they cached, so updated_at never moves back.
+// are sorted, and updated_at only moves when partners or revoked change
+// against the published keyring. Then it is the commit time of the newest
+// change under partners/, or the build time when partners/ has uncommitted
+// changes or that commit is not newer than the published updated_at. Hosts
+// refuse a keyring older than the one they cached, so updated_at never moves
+// back.
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parsePublicKey } from './lib/minisign.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const PARTNERS_DIR = path.join(ROOT, 'partners')
-const KEYRING_PATH = path.join(ROOT, 'v1', 'partners.json')
 const SCHEMA_VERSION = 1
 
 function compareBytes(a, b) {
@@ -96,17 +94,6 @@ export function keyringContent(partners = loadPartners()) {
   return { partners: listed, revoked }
 }
 
-function readPublished() {
-  if (!existsSync(KEYRING_PATH))
-    return null
-  try {
-    return JSON.parse(readFileSync(KEYRING_PATH, 'utf8'))
-  }
-  catch {
-    return null
-  }
-}
-
 function rfc3339(date) {
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z')
 }
@@ -148,9 +135,10 @@ function sameContent(published, content) {
     && JSON.stringify(published.revoked) === JSON.stringify(content.revoked)
 }
 
-export function buildKeyring() {
+/** The keyring to publish. published is the keyring the site serves now, or
+ * null before the first deploy. */
+export function buildKeyring(published = null) {
   const content = keyringContent()
-  const published = readPublished()
   const updatedAt = sameContent(published, content) ? published.updated_at : nextUpdatedAt(published?.updated_at)
   // Key order is fixed so two builds of the same content stringify
   // identically.
@@ -162,28 +150,9 @@ export function buildKeyring() {
   }
 }
 
-function serialize(document) {
+export function serializeKeyring(document) {
   return `${JSON.stringify(document, null, 2)}\n`
 }
 
-function main() {
-  const checkOnly = process.argv.includes('--check')
-  const document = buildKeyring()
-  const serialized = serialize(document)
-
-  if (checkOnly) {
-    const current = existsSync(KEYRING_PATH) ? readFileSync(KEYRING_PATH, 'utf8') : ''
-    if (current !== serialized) {
-      console.error('v1/partners.json is not up to date with partners/*.json. Run: node scripts/build-partners.mjs')
-      process.exit(1)
-    }
-    console.log('v1/partners.json is up to date')
-    return
-  }
-
-  writeFileSync(KEYRING_PATH, serialized)
-  console.log(`wrote ${document.partners.length} partner(s) and ${document.revoked.length} revoked key id(s) to v1/partners.json (updated_at ${document.updated_at})`)
-}
-
 if (import.meta.url === `file://${process.argv[1]}`)
-  main()
+  process.stdout.write(serializeKeyring(buildKeyring()))

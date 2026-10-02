@@ -1,7 +1,7 @@
 // Small GitHub REST API helpers shared by the CI scripts under scripts/ci/.
 // Deliberately dependency-free (global fetch, Node.js >= 20) like the rest of
-// this repository's tooling; only used inside GitHub Actions, never by
-// scripts/validate.mjs or scripts/build-index.mjs.
+// this repository's tooling; used by scripts/build-catalog.mjs and the CI
+// scripts, never by scripts/validate.mjs.
 
 const API = 'https://api.github.com'
 

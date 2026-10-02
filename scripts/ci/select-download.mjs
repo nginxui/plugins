@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 // Prints the URL of the package a host running <platform> would install for
-// one plugins/<id>.json's newest release, following the same selection order
-// as internal/plugin.CatalogRelease.DownloadFor in nginx-ui:
+// the newest release of one plugin of a built catalog, following the same
+// selection order as internal/plugin.CatalogRelease.DownloadFor in nginx-ui:
 // downloads[platform], then downloads["any"], then the portable
 // download_url when "platforms" is empty or covers the platform.
 //
-// Used by .github/workflows/validate.yml's lint-conformance job, which runs
+// Used by the release job of .github/workflows/validate.yml, which runs
 // on a linux-amd64 GitHub Actions runner and needs one concrete package URL
 // to download and lint — the same package a linux-amd64 nginx-ui host would
 // actually install.
 //
-// Usage: node scripts/ci/select-download.mjs <plugins/id.json> <platform>
+// Usage: node scripts/ci/select-download.mjs <index.json> <id> <platform>
 // Prints the selected URL and exits 0, or prints nothing and exits 1 when
 // the release has no package for that platform.
 
@@ -38,13 +38,17 @@ export function selectDownloadUrl(release, platform) {
 }
 
 function main() {
-  const [entryPath, platform] = process.argv.slice(2)
-  if (!entryPath || !platform) {
-    console.error('usage: node scripts/ci/select-download.mjs <plugins/id.json> <platform>')
+  const [indexPath, id, platform] = process.argv.slice(2)
+  if (!indexPath || !id || !platform) {
+    console.error('usage: node scripts/ci/select-download.mjs <index.json> <id> <platform>')
     process.exit(2)
   }
 
-  const entry = JSON.parse(readFileSync(entryPath, 'utf8'))
+  const entry = JSON.parse(readFileSync(indexPath, 'utf8')).plugins.find(plugin => plugin.id === id)
+  if (!entry) {
+    console.error(`${id} is not in ${indexPath}`)
+    process.exit(1)
+  }
   const release = newestRelease(entry)
   if (!release) {
     console.error(`${entry.id}: no releases yet`)

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://plugins.nginxui.com/schema/entry.schema.json",
   "title": "Plugin Catalog Entry",
-  "description": "One plugin as authored in plugins/<id>.json. Mirrors internal/plugin.CatalogEntry in nginx-ui, minus the fields the host computes at fetch time (source, installable_release, installed_version, update_available).",
+  "description": "One plugin as authored in plugins/<id>.json: what it is and where it is released. scripts/build-catalog.mjs adds the releases from the GitHub Releases of repository_url to build the catalog entry, see $defs/catalogEntry.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -10,9 +10,9 @@
     "name",
     "description",
     "author",
+    "repository_url",
     "trust",
-    "stage",
-    "releases"
+    "stage"
   ],
   "properties": {
     "id": {
@@ -84,11 +84,13 @@
     "stage": {
       "$ref": "#/$defs/stage"
     },
-    "releases": {
+    "yanked": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/release"
-      }
+        "$ref": "#/$defs/semver"
+      },
+      "uniqueItems": true,
+      "description": "Versions that are withdrawn. The catalog keeps them marked yanked and hosts no longer offer them."
     }
   },
   "$defs": {
@@ -384,6 +386,74 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "catalogEntry": {
+      "description": "One plugin in v1/index.json: the source entry without yanked, plus its releases.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "description",
+        "author",
+        "repository_url",
+        "trust",
+        "stage",
+        "releases"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/properties/id"
+        },
+        "name": {
+          "$ref": "#/properties/name"
+        },
+        "description": {
+          "$ref": "#/properties/description"
+        },
+        "author": {
+          "$ref": "#/properties/author"
+        },
+        "author_public_key": {
+          "$ref": "#/properties/author_public_key"
+        },
+        "homepage_url": {
+          "$ref": "#/properties/homepage_url"
+        },
+        "repository_url": {
+          "$ref": "#/properties/repository_url"
+        },
+        "readme_url": {
+          "$ref": "#/properties/readme_url"
+        },
+        "icon_url": {
+          "$ref": "#/properties/icon_url"
+        },
+        "screenshots": {
+          "$ref": "#/properties/screenshots"
+        },
+        "categories": {
+          "$ref": "#/properties/categories"
+        },
+        "capabilities": {
+          "$ref": "#/properties/capabilities"
+        },
+        "license": {
+          "$ref": "#/properties/license"
+        },
+        "trust": {
+          "$ref": "#/properties/trust"
+        },
+        "stage": {
+          "$ref": "#/properties/stage"
+        },
+        "releases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/release"
           }
         }
       }

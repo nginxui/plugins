@@ -1,12 +1,11 @@
 #!/usr/bin/env node
-// Validates the whole catalog: every plugins/<id>.json against
-// schema/entry.schema.json, v1/index.json against schema/catalog.schema.json,
-// every partners/<name>.json against schema/partner.schema.json,
-// v1/partners.json against schema/partners.schema.json, plus the structural
-// rules a JSON Schema alone cannot express (id uniqueness, provider code
-// registration, an author key on every community entry, unique partner keys,
-// a reason on every revocation, and that v1/index.json and v1/partners.json
-// are actually up to date with their sources).
+// Validates the sources of the catalog: every plugins/<id>.json against
+// schema/entry.schema.json and every partners/<name>.json against
+// schema/partner.schema.json, plus the rules a JSON Schema alone cannot
+// express (id uniqueness, the naming policy, a GitHub repository and an
+// author key where needed, unique partner keys, a reason on every
+// revocation, and a keyring that builds). The releases are checked when
+// scripts/build-catalog.mjs reads them from GitHub.
 //
 // Usage: node scripts/validate.mjs
 //
@@ -17,22 +16,15 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { validateAgainstSchemaFile } from './lib/schema-validator.mjs'
 import { parsePublicKey } from './lib/minisign.mjs'
-import { buildIndex } from './build-index.mjs'
 import { buildKeyring } from './build-partners.mjs'
+import { parseGithubRepoUrl } from './ci/github.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const PLUGINS_DIR = path.join(ROOT, 'plugins')
-const CODES_PATH = path.join(ROOT, 'codes.json')
-const INDEX_PATH = path.join(ROOT, 'v1', 'index.json')
 const PARTNERS_DIR = path.join(ROOT, 'partners')
-const KEYRING_PATH = path.join(ROOT, 'v1', 'partners.json')
 const ENTRY_SCHEMA = path.join(ROOT, 'schema', 'entry.schema.json')
-const CATALOG_SCHEMA = path.join(ROOT, 'schema', 'catalog.schema.json')
 const PARTNER_SCHEMA = path.join(ROOT, 'schema', 'partner.schema.json')
 const KEYRING_SCHEMA = path.join(ROOT, 'schema', 'partners.schema.json')
-
-const PROVIDER_CODE_PATTERN = /^[a-z0-9-]{2,32}$/
-const PLATFORM_KEY_PATTERN = /^([a-z0-9]+-[a-z0-9]+|any)$/
 
 let errorCount = 0
 
@@ -130,7 +122,7 @@ function checkNamingPolicy(entries) {
 
 /** A community package signs its plugin.sums with the author's own key, and
  * the host only trusts that key through the entry's author_public_key. The
- * release key behind official packages is pinned by the host, and a
+ * official plugin key behind official packages is pinned by the host, and a
  * verified package relies on a partner certificate or on v1/partners.json. */
 function checkAuthorKeys(entries) {
   for (const [file, entry] of entries) {
@@ -140,95 +132,13 @@ function checkAuthorKeys(entries) {
   ok('every community entry has an author_public_key')
 }
 
-/** A release needs at least one of "downloads" or
- * "download_url" (the schema's anyOf already enforces this structurally;
- * repeated here for a clearer message, matching this file's existing style
- * for cross-field checks the minimal schema validator cannot express on its
- * own), every "downloads" key must be summarized in "platforms", and a key
- * must be "<goos>-<goarch>" or "any". */
-function checkDownloadsPlatforms(entries) {
+/** The releases come from the GitHub Releases of repository_url. */
+function checkRepositories(entries) {
   for (const [file, entry] of entries) {
-    for (const release of entry.releases ?? []) {
-      const downloadKeys = Object.keys(release.downloads ?? {})
-
-      if (downloadKeys.length === 0 && !release.download_url) {
-        fail(`plugins/${file}`, `release ${release.version} has neither "downloads" nor "download_url"; a release needs at least one package`)
-        continue
-      }
-
-      const platforms = release.platforms ?? []
-      for (const key of downloadKeys) {
-        if (!PLATFORM_KEY_PATTERN.test(key)) {
-          fail(`plugins/${file}`, `release ${release.version} downloads key ${JSON.stringify(key)} must match ${PLATFORM_KEY_PATTERN} or be "any"`)
-          continue
-        }
-        if (!platforms.includes(key))
-          fail(`plugins/${file}`, `release ${release.version} downloads key ${JSON.stringify(key)} is missing from "platforms"`)
-      }
-    }
+    if (!parseGithubRepoUrl(entry.repository_url))
+      fail(`plugins/${file}`, `repository_url ${JSON.stringify(entry.repository_url)} is not a github.com repository, the releases are read from its GitHub Releases`)
   }
-  ok('downloads keys are valid platform keys and are summarized in platforms')
-}
-
-/** A dns01 provider code is a shared namespace, registered once in
- * codes.json. This only checks entries whose manifest snapshot still carries
- * dns01.providers (a large plugin like com.nginxui.dns01 strips it from the
- * snapshot to keep the catalog small; codes.json for that plugin is instead
- * kept up to date with scripts/generate-codes.mjs against the plugin's own
- * release). */
-function checkProviderCodes(entries) {
-  if (!existsSync(CODES_PATH)) {
-    fail('codes.json', 'file is missing')
-    return
-  }
-  const codes = loadJson(CODES_PATH)
-
-  for (const [file, entry] of entries) {
-    for (const release of entry.releases ?? []) {
-      const providers = release.manifest?.dns01?.providers ?? []
-      for (const provider of providers) {
-        if (!PROVIDER_CODE_PATTERN.test(provider.code)) {
-          fail(`plugins/${file}`, `dns01 provider ${JSON.stringify(provider.name)} has an invalid code ${JSON.stringify(provider.code)}`)
-          continue
-        }
-        const registration = codes[provider.code]
-        if (!registration)
-          fail('codes.json', `provider code ${JSON.stringify(provider.code)} declared by ${entry.id} (plugins/${file}) is not registered`)
-        else if (registration.owner !== entry.id)
-          fail('codes.json', `provider code ${JSON.stringify(provider.code)} is registered to ${registration.owner}, but ${entry.id} (plugins/${file}) also declares it`)
-      }
-    }
-  }
-  ok('codes.json covers every dns01 provider code present in a manifest snapshot')
-}
-
-function checkIndex() {
-  if (!existsSync(INDEX_PATH)) {
-    fail('v1/index.json', 'file is missing, run: node scripts/build-index.mjs')
-    return
-  }
-
-  let data
-  try {
-    data = loadJson(INDEX_PATH)
-  }
-  catch (err) {
-    fail('v1/index.json', `invalid JSON: ${err.message}`)
-    return
-  }
-
-  const schemaErrors = validateAgainstSchemaFile(CATALOG_SCHEMA, data)
-  for (const e of schemaErrors)
-    fail('v1/index.json', e)
-  if (schemaErrors.length === 0)
-    ok('v1/index.json matches schema/catalog.schema.json')
-
-  const expected = JSON.stringify(buildIndex())
-  const actual = JSON.stringify(data)
-  if (expected !== actual)
-    fail('v1/index.json', 'is not up to date with plugins/*.json, run: node scripts/build-index.mjs')
-  else
-    ok('v1/index.json is up to date with plugins/*.json')
+  ok('every entry is released on GitHub')
 }
 
 /** Schema-validates every partners/<name>.json and checks what the schema
@@ -299,39 +209,22 @@ function validatePartners() {
     ok(`${files.length} partner file(s) match schema/partner.schema.json with unique keys`)
 }
 
+/** The keyring builds from partners/ and matches its schema. Its
+ * updated_at is settled against the published keyring at deploy time. */
 function checkKeyring() {
-  if (!existsSync(KEYRING_PATH)) {
-    fail('v1/partners.json', 'file is missing, run: node scripts/build-partners.mjs')
-    return
-  }
-
-  let data
+  let keyring
   try {
-    data = loadJson(KEYRING_PATH)
+    keyring = buildKeyring()
   }
   catch (err) {
-    fail('v1/partners.json', `invalid JSON: ${err.message}`)
+    fail('partners/', `the keyring cannot be built: ${err.message}`)
     return
   }
-
-  const schemaErrors = validateAgainstSchemaFile(KEYRING_SCHEMA, data)
+  const schemaErrors = validateAgainstSchemaFile(KEYRING_SCHEMA, keyring)
   for (const e of schemaErrors)
-    fail('v1/partners.json', e)
+    fail('partners/', `the keyring does not match schema/partners.schema.json: ${e}`)
   if (schemaErrors.length === 0)
-    ok('v1/partners.json matches schema/partners.schema.json')
-
-  let expected
-  try {
-    expected = JSON.stringify(buildKeyring())
-  }
-  catch (err) {
-    fail('v1/partners.json', `cannot be built: ${err.message}`)
-    return
-  }
-  if (expected !== JSON.stringify(data))
-    fail('v1/partners.json', 'is not up to date with partners/*.json, run: node scripts/build-partners.mjs')
-  else
-    ok('v1/partners.json is up to date with partners/*.json')
+    ok('the partner keyring builds and matches schema/partners.schema.json')
 }
 
 function main() {
@@ -341,9 +234,7 @@ function main() {
   checkIdUniqueness(entries)
   checkNamingPolicy(entries)
   checkAuthorKeys(entries)
-  checkDownloadsPlatforms(entries)
-  checkProviderCodes(entries)
-  checkIndex()
+  checkRepositories(entries)
   validatePartners()
   checkKeyring()
 

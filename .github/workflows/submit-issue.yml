@@ -31,10 +31,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/ci/submit-issue.mjs "${GITHUB_EVENT_PATH}"
 
-      - name: Regenerate v1/index.json
-        if: steps.draft.outputs.result == 'ok'
-        run: node scripts/build-index.mjs
-
       - id: cpr
         name: Open a pull request
         if: steps.draft.outputs.result == 'ok'

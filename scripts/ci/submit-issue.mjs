@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // Turns a "Submit a plugin" issue form (.github/ISSUE_TEMPLATE/submit-plugin.yml)
-// into a draft plugins/<id>.json. Driven by .github/workflows/submit-issue.yml,
+// into a draft plugins/<id>.json. The draft names no release: the deploy
+// builds them from the GitHub Releases of the repository once the pull request
+// is merged. Driven by .github/workflows/submit-issue.yml,
 // which then opens a pull request from whatever this script wrote (or posts
 // an explanatory comment back on the issue and writes nothing, on the
 // well-known failure modes below).
@@ -12,11 +14,9 @@
 import { readFileSync, writeFileSync, existsSync, appendFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import { createHash } from 'node:crypto'
-import { parseGithubRepoUrl, getLatestRelease, fetchRawFile, downloadBinary } from './github.mjs'
-import { localizedTextFromManifest, platformsFromManifest, trimManifestSnapshot } from './manifest-snapshot.mjs'
-import { findPortableAsset, buildDownloadsMap } from './release-assets.mjs'
-import { releaseNotes } from './releases.mjs'
+import { parseGithubRepoUrl, getLatestRelease, fetchRawFile } from './github.mjs'
+import { localizedTextFromManifest } from './manifest-snapshot.mjs'
+import { findPlatformAssets, findPortableAsset } from './release-assets.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const PLUGINS_DIR = path.join(ROOT, 'plugins')
@@ -101,23 +101,11 @@ async function main() {
     fail(`plugin.json at ${release.tag_name} declares id "${manifest.id}", which does not match the submitted id "${pluginId}".`)
 
   const version = release.tag_name.replace(/^v/, '')
-  const portableAsset = findPortableAsset(release.assets, pluginId, version)
-  // A first submission is always community trust. Its packages carry their
-  // own signature (plugin.sums.minisig), and the entry records the sha256 of
-  // every archive as a download check.
-  const { downloads } = await buildDownloadsMap(release.assets, pluginId, version, { token })
-  if (!portableAsset && Object.keys(downloads).length === 0)
+  if (!findPortableAsset(release.assets, pluginId, version) && findPlatformAssets(release.assets, pluginId, version).size === 0)
     fail(`${release.html_url} has no ${pluginId}-${version}.tar.gz or per-platform package asset.`)
 
-  let downloadUrl, sha256
-  if (portableAsset) {
-    downloadUrl = portableAsset.browser_download_url
-    const bytes = await downloadBinary(portableAsset.browser_download_url, token)
-    sha256 = createHash('sha256').update(bytes).digest('hex')
-  }
-
+  // A first submission is always community trust.
   const { name, description } = localizedTextFromManifest(manifest)
-  const notes = releaseNotes(release.body, release.html_url)
   const entry = {
     id: pluginId,
     name,
@@ -133,21 +121,6 @@ async function main() {
     license: '',
     trust: 'community',
     stage: 'beta',
-    releases: [
-      {
-        version,
-        released_at: release.published_at ?? release.created_at,
-        api_version: manifest.api_version,
-        ...(manifest.min_nginx_ui_version ? { min_nginx_ui_version: manifest.min_nginx_ui_version } : {}),
-        platforms: platformsFromManifest(manifest),
-        ...(Object.keys(downloads).length > 0 ? { downloads } : {}),
-        ...(downloadUrl ? { download_url: downloadUrl } : {}),
-        ...(sha256 ? { sha256 } : {}),
-        release_notes_url: release.html_url,
-        ...(notes ? { notes } : {}),
-        manifest: trimManifestSnapshot(manifest),
-      },
-    ],
   }
 
   writeFileSync(entryFile, `${JSON.stringify(entry, null, 2)}\n`)

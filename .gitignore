@@ -19,3 +19,7 @@ node_modules/
 *.key
 plugin.key
 *.minisig.tmp
+
+# Built by scripts/build-catalog.mjs, deployed by CI, never committed
+/dist/
+/v1/

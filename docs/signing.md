@@ -23,8 +23,8 @@ nginx-ui derives the trust level of a package from the key that signed its
 
 | Key that signed `plugin.sums` | Trust |
 | --- | --- |
-| The nginx-ui project's release key, pinned in every build (`internal/releasesign`) | `official` |
-| A partner key, certified by the release key in the package (`plugin.partner`) or listed in the signed partner keyring (`v1/partners.json`) | `verified` |
+| The official plugin key of the nginx-ui project, pinned in every build (`internal/releasesign`) | `official` |
+| A partner key, certified by the official plugin key in the package (`plugin.partner`) or listed in the signed partner keyring (`v1/partners.json`) | `verified` |
 | The `author_public_key` of the catalog entry | `community` |
 | No signature, or a key none of the rows above match | unsigned |
 
@@ -71,16 +71,17 @@ minisign -G -p plugin.pub -s plugin.key
 ```
 
 `plugin.pub` goes into the entry's `author_public_key`, either whole or as
-its single key line. `.github/workflows/validate.yml` verifies every
-package of a community entry against that key. When an author replaces the
+its single key line. `scripts/build-catalog.mjs` verifies every package
+of a community entry against that key before it lists the release. When an author replaces the
 key, packages signed with the old one no longer match the entry and count
 as unsigned, so the author signs new releases with the new key and updates
 `author_public_key` in the same pull request that lists the first of them.
 
-## The project release key and partner keys
+## The official plugin key and partner keys
 
-The key that makes a package `official` is the nginx-ui project's release
-key. It also signs partner certificates and the partner keyring. A partner
+The key that makes a package `official` is the official plugin key of the
+nginx-ui project, kept apart from the key that signs nginx-ui releases. It
+also signs partner certificates and the partner keyring. A partner
 organization generates its own key pair the same way and sends the public
 half to the maintainers. This repository never signs a package: packages
 are signed where they are built, before their archive and its `sha256`
@@ -110,7 +111,7 @@ partner key, and the partner ships it unchanged in every package:
 
 - `plugin.partner`: the partner's minisign public key in text form, the
   file `minisign -G` wrote.
-- `plugin.partner.minisig`: a release key signature over the exact bytes of
+- `plugin.partner.minisig`: a official plugin key signature over the exact bytes of
   `plugin.partner`, whose trusted comment is `partner:<name>`, or
   `partner:<name>;expires:<YYYY-MM-DD>` with an expiry.
 
@@ -148,16 +149,16 @@ nginx-ui plugin certify partner.pub --key /path/to/release.key \
 
 The maintainers send both files back to the partner, who puts them at the
 package root as described in [Signing a package](#signing-a-package).
-`.github/workflows/validate.yml` checks the certificate of a `verified`
-entry's newest release: the trusted comment, the expiry if it has one, that
-the key is not revoked, that `plugin.sums` is signed by the certified key
-and, when the `PLUGIN_SIGNING_PUBLIC_KEY` repository variable holds the
-release public key, the release key signature.
+`scripts/build-catalog.mjs` checks the certificate of a `verified` entry
+before it lists a release: the trusted comment, the expiry if it has one,
+that the key is not revoked, that `plugin.sums` is signed by the certified
+key and, when the `PLUGIN_SIGNING_PUBLIC_KEY` variable holds the official
+plugin public key, the official plugin key signature.
 
 ## Publishing the partner keyring
 
 `v1/partners.json` is the partner keyring, and `v1/partners.json.minisig`
-is the release key signature over its exact bytes:
+is the official plugin key signature over its exact bytes:
 
 ```jsonc
 {
@@ -195,32 +196,31 @@ the content does.
 
 To add or change a partner:
 
-1. Add or edit `partners/<name>.json` in a pull request and run
-   `node scripts/build-partners.mjs`. `node scripts/validate.mjs` checks
-   both the file and the rebuilt keyring.
-2. Once merged, `.github/workflows/build-index.yml` rebuilds
-   `v1/partners.json`, signs it into `v1/partners.json.minisig` and commits
-   both. Hosts pick it up on their next catalog refresh.
+1. Add or edit `partners/<name>.json` in a pull request.
+   `node scripts/validate.mjs` checks the file and that the keyring builds,
+   `node scripts/build-partners.mjs` prints it.
+2. Once merged, `.github/workflows/deploy.yml` builds `v1/partners.json`,
+   signs it into `v1/partners.json.minisig` and deploys both. Neither is
+   committed. Hosts pick them up on their next catalog refresh.
 
 The workflow reads these repository settings:
 
 | Name | Kind | Content |
 | --- | --- | --- |
-| `PLUGIN_SIGNING_KEY` | secret | The release secret key file, as `minisign -G` wrote it. |
+| `PLUGIN_SIGNING_KEY` | secret | The official plugin secret key file, as `minisign -G` wrote it. |
 | `PLUGIN_SIGNING_KEY_PASSWORD` | secret | Its password, piped to minisign's prompt. Empty for a key made with `-W`. |
-| `PLUGIN_SIGNING_PUBLIC_KEY` | variable | The release public key. `build-index.yml` checks the new signature against it and `validate.yml` checks partner certificates against it. |
+| `PLUGIN_SIGNING_PUBLIC_KEY` | variable | The official plugin public key. `deploy.yml` checks the new signature against it, and the build checks official packages and partner certificates against it. |
 
-Without `PLUGIN_SIGNING_KEY` the workflow still builds and commits the
-keyring, leaves it unsigned and says so in a notice. Hosts ignore a keyring
+Without `PLUGIN_SIGNING_KEY` the workflow still builds and deploys the
+keyring, leaves it unsigned and says so in a warning. Hosts ignore a keyring
 without a valid signature. After adding or changing the secret, run the
-*Build index* workflow by hand to sign the current keyring.
+*Deploy* workflow by hand to sign the current keyring.
 
 ### Revoking a partner key
 
-1. Set `"revoked": true` and a `"reason"` in `partners/<name>.json`, then
-   run `node scripts/build-partners.mjs`. The partner leaves `partners` and
-   its key id joins `revoked`.
-2. Merge. CI signs the new keyring, and hosts pick it up on their next
+1. Set `"revoked": true` and a `"reason"` in `partners/<name>.json`. The
+   partner leaves `partners` and its key id joins `revoked`.
+2. Merge. The deploy signs the new keyring, and hosts pick it up on their next
    catalog refresh. From then on the key is not a partner key on those
    hosts, whatever certificate a package carries.
 3. For a leaked key, yank the affected releases as described in
@@ -245,7 +245,7 @@ maintainers set, or when moving signing to new infrastructure.
    `plugin-2.key` locally to keep it apart from the outgoing one during the
    overlap.
 2. Make hosts trust `plugin-2.pub` **before** signing anything with it.
-   - The project release key: pin it in nginx-ui (`internal/releasesign`)
+   - The official plugin key: pin it in nginx-ui (`internal/releasesign`)
      and keep the old key pinned too, so everything the old key signed
      keeps verifying. The change ships with the next nginx-ui release.
    - A partner key: issue a certificate for the new key and switch
@@ -255,10 +255,11 @@ maintainers set, or when moving signing to new infrastructure.
 3. Once that release is out, or the new keyring is published, switch the
    signing secret of the build pipelines to the new key and sign every new
    package with it. Keep signing partner certificates and
-   `v1/partners.json` with the old release key until step 5, so hosts that
+   `v1/partners.json` with the old official plugin key until step 5, so hosts that
    have not upgraded still accept them.
 4. Existing `plugins/<id>.json` entries need no change. An official or
-   partner entry does not name its key.
+   partner entry does not name its key. Releases already in the catalog keep
+   their packages, signed with the old key.
 5. After a deprecation window long enough that essentially every running
    nginx-ui node has upgraded past the release that pinned the new key,
    remove the old key in a later nginx-ui release. From then on, packages

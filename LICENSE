@@ -23,7 +23,7 @@ SOFTWARE.
 ---
 
 This license covers the catalog infrastructure in this repository (schema,
-scripts, workflows, documentation, and the `plugins/*.json` / `v1/index.json`
-catalog data). It does not extend to the plugins the catalog lists: each
+scripts, workflows, documentation, the `plugins/*.json` entries and the
+catalog built from them). It does not extend to the plugins the catalog lists: each
 plugin is distributed under the license its own repository declares, as
 recorded in that plugin's `license` field.

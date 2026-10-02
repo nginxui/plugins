@@ -1,9 +1,8 @@
-// Decides which GitHub Releases a catalog entry still lacks and which release
-// channel a new catalog release gets. Pure functions, kept
-// apart from scripts/ci/poll-releases.mjs so they can be tested without the
-// network.
+// Pure helpers for the release records scripts/build-catalog.mjs builds from
+// GitHub Releases: versions, channels, ordering and notes. Kept apart from the
+// network code so they can be tested on their own.
 
-import { compareSemver, isSemver } from './semver.mjs'
+import { compareSemver } from './semver.mjs'
 
 // Prerelease identifiers that put a version on the dev channel.
 const DEV_IDENTIFIERS = new Set(['alpha', 'dev', 'nightly', 'snapshot', 'canary', 'preview'])
@@ -31,28 +30,6 @@ export function channelToSet(version, ghRelease) {
   if (ghRelease.prerelease && inferChannel(version) === 'stable')
     return 'beta'
   return undefined
-}
-
-/** The GitHub Releases the entry does not list yet: no drafts, a valid
- * semantic version in the tag, one per version, oldest first. */
-export function missingReleases(entry, ghReleases, warn = () => {}) {
-  const listed = new Set((entry.releases ?? []).map(release => release.version))
-  const seen = new Set()
-  const missing = []
-  for (const ghRelease of ghReleases) {
-    if (ghRelease.draft)
-      continue
-    const version = tagVersion(ghRelease.tag_name)
-    if (!isSemver(version)) {
-      warn(`  skipping tag ${ghRelease.tag_name}: not a semantic version`)
-      continue
-    }
-    if (listed.has(version) || seen.has(version))
-      continue
-    seen.add(version)
-    missing.push(ghRelease)
-  }
-  return missing.sort((a, b) => compareSemver(tagVersion(a.tag_name), tagVersion(b.tag_name)))
 }
 
 /** The releases of an entry ordered by semantic version, oldest first. */
