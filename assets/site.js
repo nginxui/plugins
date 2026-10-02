@@ -121,22 +121,33 @@
     const search = document.querySelector('.search')
     const cards = [...document.querySelectorAll('.plugin')]
     const empty = document.querySelector('.empty')
-    if (!search)
-      return
-    search.hidden = false
-    search.addEventListener('input', () => {
-      const words = search.value.toLowerCase().split(/\s+/).filter(Boolean)
-      let shown = 0
-      for (const card of cards) {
-        const match = words.every(word => card.dataset.search.includes(word))
-        if (match && card.hidden && !calm.matches)
-          card.animate([{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], { duration: 200, easing: 'ease-out' })
-        card.hidden = !match
-        if (match)
-          shown++
-      }
-      empty.hidden = shown > 0
-    })
+    if (search) {
+      search.hidden = false
+      search.addEventListener('input', () => {
+        const words = search.value.toLowerCase().split(/\s+/).filter(Boolean)
+        let shown = 0
+        for (const card of cards) {
+          const match = words.every(word => card.dataset.search.includes(word))
+          if (match && card.hidden && !calm.matches)
+            card.animate([{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], { duration: 200, easing: 'ease-out' })
+          card.hidden = !match
+          if (match)
+            shown++
+        }
+        empty.hidden = shown > 0
+      })
+    }
+
+    // The provider list of a DNS plugin filters by name as well.
+    for (const field of document.querySelectorAll('.provider-search')) {
+      const items = [...field.nextElementSibling.children]
+      field.hidden = false
+      field.addEventListener('input', () => {
+        const words = field.value.toLowerCase().split(/\s+/).filter(Boolean)
+        for (const item of items)
+          item.hidden = !words.every(word => item.textContent.toLowerCase().includes(word))
+      })
+    }
   }
 
   function setUpDetails() {

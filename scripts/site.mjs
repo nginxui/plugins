@@ -283,7 +283,7 @@ function renderVersions(plugin, d, t) {
 function renderProvides(d, t) {
   const items = d.capabilities.map((c) => {
     const providers = c.name === 'dns01' && d.providers.length > 0
-      ? `<details class="providers"><summary>${escapeHtml(t.providers(d.providers.length))}</summary><ul>${d.providers.map(p => `<li>${escapeHtml(p.name)}</li>`).join('')}</ul></details>`
+      ? `<details class="providers"><summary>${escapeHtml(t.providers(d.providers.length))}</summary><input class="provider-search" type="search" placeholder="${escapeHtml(t.searchProviders)}" aria-label="${escapeHtml(t.searchProviders)}" hidden><ul>${d.providers.map(p => `<li>${escapeHtml(p.name)}</li>`).join('')}</ul></details>`
       : ''
     return `<li><strong>${escapeHtml(c.label)}</strong><p>${escapeHtml(c.description)}</p>${providers}</li>`
   })
