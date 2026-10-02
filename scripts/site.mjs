@@ -297,12 +297,18 @@ function renderPermissions(d, t, locale) {
   const hosts = d.manifest.network_hosts ?? []
   return `<ul class="rows">${names.map((name) => {
     const { label, description } = permission(name, locale)
+    // An empty reason is none, an empty translation falls back to English.
+    const reason = [d.manifest.i18n?.[locale]?.permission_reasons?.[name], d.manifest.permission_reasons?.[name]]
+      .find(text => typeof text === 'string' && text.trim())
     const extra = name === 'network'
       ? (hosts.length > 0
           ? `<p class="hosts-label">${escapeHtml(t.onlyHosts)}</p><ul class="hosts">${hosts.map(host => `<li><code>${escapeHtml(host)}</code></li>`).join('')}</ul>`
           : `<p class="muted">${escapeHtml(t.noHosts)}</p>`)
       : ''
-    return `<li><strong>${escapeHtml(label)}</strong><p>${escapeHtml(description)}</p>${extra}</li>`
+    const why = reason
+      ? `<p class="reason"><span>${escapeHtml(t.authorNote)}</span>${escapeHtml(reason.trim())}</p>`
+      : ''
+    return `<li><strong>${escapeHtml(label)}</strong><p>${escapeHtml(description)}</p>${why}${extra}</li>`
   }).join('')}</ul>`
 }
 

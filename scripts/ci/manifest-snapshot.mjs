@@ -26,6 +26,7 @@ const SNAPSHOT_MEMBERS = [
   'requires_capabilities',
   'conflicts',
   'network_hosts',
+  'permission_reasons',
 ]
 
 /** "<goos>-<goarch>" for every key in server.executables, or ["any"] for a

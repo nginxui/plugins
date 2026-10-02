@@ -35,7 +35,7 @@ test('every language has a list and a page per plugin', () => {
     author: 'someone',
     trust: 'community',
     capabilities: ['http'],
-    releases: [{ version: '1.0.0', released_at: '2026-10-01T00:00:00Z', platforms: ['any'], manifest: { permissions: ['network'], network_hosts: ['api.example.com'], server: { resources: { recommended_memory_mb: 128 } } } }],
+    releases: [{ version: '1.0.0', released_at: '2026-10-01T00:00:00Z', platforms: ['any'], manifest: { permissions: ['network'], network_hosts: ['api.example.com'], permission_reasons: { network: 'To call <the> API.' }, i18n: { zh_CN: { permission_reasons: { network: '调用 API。' } }, ja_JP: { permission_reasons: { network: ' ' } } }, server: { resources: { recommended_memory_mb: 128 } } } }],
   }
   const pages = new Map(renderSite({ updated_at: '2026-10-02T00:00:00Z', plugins: [plugin] }))
   assert.deepEqual([...pages.keys()].sort(), [
@@ -53,5 +53,9 @@ test('every language has a list and a page per plugin', () => {
   assert.match(page, /<code>api\.example\.com<\/code>/)
   assert.match(page, /128 MB/)
   assert.doesNotMatch(page, /<x>/)
+  assert.match(page, /<p class="reason"><span>Note from the author<\/span>To call &#60;the&#62; API\.<\/p>/)
+  assert.match(pages.get('zh_CN/plugins/com.example.demo/index.html'), /<p class="reason"><span>作者说明<\/span>调用 API。<\/p>/)
+  // An empty translation falls back to the English reason.
+  assert.match(pages.get('ja_JP/plugins/com.example.demo/index.html'), /<p class="reason"><span>作者による説明<\/span>To call &#60;the&#62; API\.<\/p>/)
   assert.match(pages.get('index.html'), /href="\/plugins\/com\.example\.demo\/" data-plugin="com\.example\.demo"/)
 })
