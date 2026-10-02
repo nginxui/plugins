@@ -2,7 +2,9 @@
 name = "nginxui-plugins-release-hook"
 main = "src/index.js"
 compatibility_date = "2026-10-01"
-workers_dev = true
+# The webhook URL of the catalog GitHub App is https://plugin-hooks.nginxui.com/github.
+workers_dev = false
+routes = [{ pattern = "plugin-hooks.nginxui.com", custom_domain = true }]
 
 [vars]
 CATALOG_URL = "https://plugins.nginxui.com"

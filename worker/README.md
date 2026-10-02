@@ -21,13 +21,13 @@ repository grants nothing beyond reading its releases.
 
 | App | Visibility | Permissions | Webhook | Installed on |
 | --- | --- | --- | --- | --- |
-| Catalog, for example "NGINX UI Plugin Catalog" | Public | Repository: Contents read | Release events to `https://<worker>/github`, with a secret | The `nginxui` organization, and the repository of any plugin whose author wants releases listed at once |
+| Catalog, for example "NGINX UI Plugin Catalog" | Public | Repository: Contents read | Release events to `https://plugin-hooks.nginxui.com/github`, with a secret | The `nginxui` organization, and the repository of any plugin whose author wants releases listed at once |
 | Deploy, for example "NGINX UI Catalog Deploy" | Private | Repository: Actions read and write | None | `nginxui/plugins` only |
 
 To create them, in the settings of the `nginxui` organization, go to
 Developer settings, GitHub Apps, New GitHub App:
 
-1. Catalog App: set the webhook URL to `https://<worker host>/github`,
+1. Catalog App: set the webhook URL to `https://plugin-hooks.nginxui.com/github`,
    generate a random webhook secret, give Repository permissions, Contents,
    Read-only, subscribe to the Release event, and allow installation on any
    account. Install it on the organization.
@@ -51,10 +51,10 @@ Worker converts it, there is no need to run openssl.
 
 `.github/workflows/worker.yml` tests the Worker on every change and deploys
 it from `main` with the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`
-secrets of this repository. The token needs Workers Scripts edit next to the
-Pages edit the catalog deploy needs. The Worker answers on its
-`workers.dev` address; a custom domain can be added in `wrangler.toml` with a
-`routes` entry.
+secrets of the `cloudflare` environment. The token needs Workers edit next to
+the Pages edit the catalog deploy needs, and Workers Routes edit and DNS edit
+on the `nginxui.com` zone for the custom domain `plugin-hooks.nginxui.com`
+that `wrangler.toml` binds. The `workers.dev` address is turned off.
 
 ## Local test
 
