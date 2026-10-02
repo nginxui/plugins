@@ -93,7 +93,7 @@ entry:
 2. **Releases**: `scripts/build-catalog.mjs` builds the entry from your
    GitHub Releases. For every release the published catalog does not list
    yet, and for the newest one, it downloads every package, checks it
-   against the digest of its `.sha256` asset and extracts it. Both
+   against the sha256 GitHub records for the asset and extracts it. Both
    `plugin.sums` and `plugin.sums.minisig` must sit at the package root,
    every regular file besides them must be listed in `plugin.sums` with a
    matching digest, and `plugin.sums.minisig` must verify against the key of

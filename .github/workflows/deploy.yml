@@ -52,6 +52,15 @@ jobs:
 
       - run: node scripts/validate.mjs
 
+      # Releases that did not verify, so the hourly build does not download
+      # them again until their packages or the keys change. A cache entry is
+      # immutable, every run saves a new one and restores the newest.
+      - uses: actions/cache@v6
+        with:
+          path: .cache/verify-failures.json
+          key: verify-failures-${{ github.run_id }}
+          restore-keys: verify-failures-
+
       - id: build
         name: Build the site
         env:
@@ -61,9 +70,9 @@ jobs:
           FIRST_DEPLOY: ${{ inputs.first_deploy }}
         run: |
           if [ "${FIRST_DEPLOY}" = "true" ]; then
-            node scripts/build-catalog.mjs --out dist --published none
+            node scripts/build-catalog.mjs --out dist --failures .cache/verify-failures.json --published none
           else
-            node scripts/build-catalog.mjs --out dist
+            node scripts/build-catalog.mjs --out dist --failures .cache/verify-failures.json
           fi
 
       # The trusted comment is fixed for a given updated_at and Ed25519 is

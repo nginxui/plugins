@@ -55,6 +55,13 @@ export function parseSha256Text(text) {
   return match ? match[1].toLowerCase() : null
 }
 
+/** The sha256 GitHub computed for an asset ("sha256:<hex>" in its
+ * "digest"), or null for an asset uploaded before GitHub recorded digests. */
+export function assetDigest(asset) {
+  const match = /^sha256:([0-9a-f]{64})$/i.exec(asset.digest ?? '')
+  return match ? match[1].toLowerCase() : null
+}
+
 async function fetchAssetText(url, token) {
   const headers = token ? { Authorization: `Bearer ${token}` } : {}
   const response = await fetch(url, { headers })
@@ -66,11 +73,11 @@ async function fetchAssetText(url, token) {
 /**
  * Builds the "downloads" map for a release from its GitHub
  * assets: one entry per per-platform archive found, each with its "url" and
- * the digest read from the archive's small ".sha256" sidecar asset. That is
- * the file plugin-dns01/README.md's Packaging section describes as
- * feeding this map, so every platform's archive (tens of MiB) does not have
- * to be downloaded just to hash it here. The package signature is not part
- * of the map: it lives in plugin.sums.minisig inside each archive.
+ * its sha256. That is the digest GitHub computed for the asset, or for an
+ * older asset without one, the digest in its small ".sha256" sidecar asset,
+ * so no archive (tens of MiB) is downloaded just to hash it. The package
+ * signature is not part of the map: it lives in plugin.sums.minisig inside
+ * each archive.
  *
  * Returns { downloads, platforms }; both are empty when no per-platform
  * asset is found (a webapp-only or interpreted plugin, or one that only
@@ -83,6 +90,11 @@ export async function buildDownloadsMap(assets, id, version, { token }) {
 
   for (const platform of platforms) {
     const asset = byPlatform.get(platform)
+    const known = assetDigest(asset)
+    if (known) {
+      downloads[platform] = { url: asset.browser_download_url, sha256: known }
+      continue
+    }
     const shaAsset = findSha256Asset(assets, asset)
     if (!shaAsset)
       throw new Error(`${asset.name}: release has no matching .sha256 asset`)

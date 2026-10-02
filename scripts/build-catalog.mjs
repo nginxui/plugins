@@ -11,7 +11,7 @@
 // a package does not verify.
 //
 // Usage: node scripts/build-catalog.mjs [--out <dir>] [--published <url>|none]
-//          [--only <plugins/id.json>]... [--verify-newest]
+//          [--only <plugins/id.json>]... [--verify-newest] [--failures <file>]
 //
 //   --out <dir>        write the site there, default dist
 //   --published <url>  the site to read the published catalog and keyring
@@ -21,12 +21,17 @@
 //   --only <file>      build these entries only, for checking a pull request
 //   --verify-newest    also check the newest release of every built entry
 //                      when the published catalog already lists it
+//   --failures <file>  remembers the releases that did not verify, so one is
+//                      only downloaded again once its packages or the key it
+//                      is checked against change. CI keeps the file in its
+//                      cache.
 //
 // Env: GITHUB_TOKEN (raises the API rate limit), PLUGIN_SIGNING_PUBLIC_KEY (the
 // official plugin key, see verify-release.mjs). Writes changed=true|false to
 // $GITHUB_OUTPUT: whether the catalog or the keyring differ from the
 // published ones.
 
+import { createHash } from 'node:crypto'
 import { appendFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -113,12 +118,25 @@ async function fetchPublished(site, file) {
   return response.json()
 }
 
+/** What a verification of record depends on: its packages and the key the
+ * entry is checked against. A release that failed is checked again only when
+ * this changes. */
+function verificationFingerprint(entry, record) {
+  const packages = [
+    ...(record.download_url ? [[record.download_url, record.sha256]] : []),
+    ...Object.values(record.downloads ?? {}).map(download => [download.url, download.sha256]),
+  ].sort()
+  const keys = [entry.trust, entry.author_public_key ?? '', process.env.PLUGIN_SIGNING_PUBLIC_KEY ?? '']
+  return createHash('sha256').update(JSON.stringify([packages, keys])).digest('hex')
+}
+
 /**
  * The releases of one entry. published is the entry of the published catalog
- * or undefined. Returns { releases, failures }: failures are reasons the build
+ * or undefined. failures maps "<id>@<version>" to the fingerprint of a
+ * release that did not verify and is updated in place. Returns { releases, failures }: failures are reasons the build
  * must stop for, a release that is new and does not verify is only left out.
  */
-async function entryReleases(entry, published, { token, verifyNewest }) {
+async function entryReleases(entry, published, { token, verifyNewest, failed, visited }) {
   const failures = []
   const pinned = new Map((published?.releases ?? []).map(release => [release.version, release]))
   const repo = parseGithubRepoUrl(entry.repository_url)
@@ -160,10 +178,19 @@ async function entryReleases(entry, published, { token, verifyNewest }) {
     const record = await releaseFromGithub(entry, repo, ghRelease, token, message => console.warn(`::warning title=${entry.id}::${message}`))
     if (!record)
       continue
+    const key = `${entry.id}@${version}`
+    visited.add(key)
+    const fingerprint = verificationFingerprint(entry, record)
+    if (failed[key] === fingerprint) {
+      console.warn(`::warning title=${entry.id}::${version} is left out, it did not verify before and nothing it depends on changed`)
+      continue
+    }
     if (!await verifyRelease(entry, record)) {
+      failed[key] = fingerprint
       console.warn(`::warning title=${entry.id}::${version} is left out, a package does not verify`)
       continue
     }
+    delete failed[key]
     releases.push(record)
   }
 
@@ -211,8 +238,12 @@ async function main() {
       'published': { type: 'string', default: process.env.CATALOG_URL || DEFAULT_SITE },
       'only': { type: 'string', multiple: true, default: [] },
       'verify-newest': { type: 'boolean', default: false },
+      'failures': { type: 'string' },
     },
   })
+  const failuresFile = values.failures ? path.resolve(values.failures) : null
+  const failed = failuresFile && existsSync(failuresFile) ? JSON.parse(readFileSync(failuresFile, 'utf8')) : {}
+  const visited = new Set()
   const token = process.env.GITHUB_TOKEN
   const site = values.published === 'none' ? null : values.published
 
@@ -226,7 +257,7 @@ async function main() {
   const plugins = []
   const failures = []
   for (const entry of loadEntries(values.only)) {
-    const result = await entryReleases(entry, publishedById.get(entry.id), { token, verifyNewest: values['verify-newest'] })
+    const result = await entryReleases(entry, publishedById.get(entry.id), { token, verifyNewest: values['verify-newest'], failed, visited })
     failures.push(...result.failures)
     plugins.push(catalogEntry(entry, result.releases))
     console.log(`${entry.id}: ${result.releases.map(release => release.version).join(', ') || 'no release'}`)
@@ -244,6 +275,18 @@ async function main() {
     failures.push(`v1/index.json: ${error}`)
   for (const error of validateAgainstSchemaFile(KEYRING_SCHEMA, keyring))
     failures.push(`v1/partners.json: ${error}`)
+
+  if (failuresFile) {
+    // A full build forgets the releases that are gone.
+    if (values.only.length === 0) {
+      for (const key of Object.keys(failed)) {
+        if (!visited.has(key))
+          delete failed[key]
+      }
+    }
+    mkdirSync(path.dirname(failuresFile), { recursive: true })
+    writeFileSync(failuresFile, `${JSON.stringify(failed, null, 2)}\n`)
+  }
 
   if (failures.length > 0) {
     for (const failure of failures)

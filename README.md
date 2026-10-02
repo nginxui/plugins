@@ -59,14 +59,16 @@ the GitHub Releases of each plugin repository.
 
 `scripts/build-catalog.mjs` reads every GitHub Release of the
 `repository_url` of each entry, drafts skipped, and builds its release record:
-the packages and the digests of their `.sha256` assets, the `plugin.json`
+the packages with the sha256 GitHub records for each asset (the `.sha256`
+asset next to it for an asset older than those records), the `plugin.json`
 snapshot of the tag, the release notes and the channel. Then:
 
 - A release the published catalog does not list yet is listed only after
   every one of its packages is downloaded and verified: its `sha256`, the
   `plugin.sums` inside it and the `plugin.sums.minisig` signature against the
   key the entry's trust level calls for. A release that does not verify is
-  left out, and tried again on the next build.
+  left out, and downloaded again only once its packages or that key change.
+  This is the only time a build downloads packages.
 - A release the published catalog lists keeps its packages and digests. When
   GitHub serves other digests for it, the build fails instead of following
   the change. Its notes and channel follow the GitHub Release.

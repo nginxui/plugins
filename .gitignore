@@ -23,3 +23,4 @@ plugin.key
 # Built by scripts/build-catalog.mjs, deployed by CI, never committed
 /dist/
 /v1/
+/.cache/

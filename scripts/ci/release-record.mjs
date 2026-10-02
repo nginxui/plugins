@@ -7,13 +7,12 @@
 import { createHash } from 'node:crypto'
 import { downloadBinary, fetchRawFile } from './github.mjs'
 import { platformsFromManifest, trimManifestSnapshot } from './manifest-snapshot.mjs'
-import { buildDownloadsMap, findPortableAsset } from './release-assets.mjs'
+import { assetDigest, buildDownloadsMap, findPortableAsset } from './release-assets.mjs'
 import { channelToSet, releaseNotes, tagVersion } from './releases.mjs'
 
 /** The release record of a GitHub Release, or null after saying why it was
- * skipped. The portable package is downloaded once to hash it, the
- * per-platform packages are not: their digests come from the ".sha256"
- * assets. */
+ * skipped. The digests are the ones GitHub computed for the assets; only an
+ * older portable package without one is downloaded to hash it. */
 export async function releaseFromGithub(entry, repo, ghRelease, token, warn = console.warn) {
   const version = tagVersion(ghRelease.tag_name)
 
@@ -43,8 +42,8 @@ export async function releaseFromGithub(entry, repo, ghRelease, token, warn = co
   let downloadUrl, sha256
   if (portableAsset) {
     downloadUrl = portableAsset.browser_download_url
-    const bytes = await downloadBinary(downloadUrl, token)
-    sha256 = createHash('sha256').update(bytes).digest('hex')
+    sha256 = assetDigest(portableAsset)
+      ?? createHash('sha256').update(await downloadBinary(downloadUrl, token)).digest('hex')
   }
 
   return {
@@ -77,14 +76,22 @@ export function releaseText(ghRelease) {
 }
 
 /** The digests a published release record pins that the GitHub Release now
- * contradicts, as "<platform>: <pinned> -> <current>" lines. Only the
- * per-platform packages are compared, their ".sha256" assets are small. */
+ * contradicts, as "<package>: <pinned> -> <current>" lines. A portable
+ * package is compared when GitHub knows its digest. */
 export async function changedDigests(entry, published, ghRelease, token) {
+  const changes = []
+  if (published.download_url) {
+    const portable = findPortableAsset(ghRelease.assets, entry.id, published.version)
+    const current = portable && assetDigest(portable)
+    if (!portable)
+      changes.push(`portable: ${published.sha256} -> the package is gone`)
+    else if (current && current !== published.sha256)
+      changes.push(`portable: ${published.sha256} -> ${current}`)
+  }
   const pinned = published.downloads ?? {}
   if (Object.keys(pinned).length === 0)
-    return []
+    return changes
   const { downloads } = await buildDownloadsMap(ghRelease.assets, entry.id, published.version, { token })
-  const changes = []
   for (const [platform, download] of Object.entries(pinned)) {
     const current = downloads[platform]
     if (!current)
