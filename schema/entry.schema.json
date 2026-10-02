@@ -255,6 +255,12 @@
         "release_notes_url": {
           "$ref": "#/$defs/httpsUrl"
         },
+        "notes": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "What changed in the release, in Markdown: the body of the GitHub Release, cut at 4096 characters. The index keeps it on the five newest releases of a plugin."
+        },
         "yanked": {
           "type": "boolean"
         },

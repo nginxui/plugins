@@ -16,6 +16,7 @@ import { createHash } from 'node:crypto'
 import { parseGithubRepoUrl, getLatestRelease, fetchRawFile, downloadBinary } from './github.mjs'
 import { localizedTextFromManifest, platformsFromManifest, trimManifestSnapshot } from './manifest-snapshot.mjs'
 import { findPortableAsset, buildDownloadsMap } from './release-assets.mjs'
+import { releaseNotes } from './releases.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const PLUGINS_DIR = path.join(ROOT, 'plugins')
@@ -116,6 +117,7 @@ async function main() {
   }
 
   const { name, description } = localizedTextFromManifest(manifest)
+  const notes = releaseNotes(release.body, release.html_url)
   const entry = {
     id: pluginId,
     name,
@@ -142,6 +144,7 @@ async function main() {
         ...(downloadUrl ? { download_url: downloadUrl } : {}),
         ...(sha256 ? { sha256 } : {}),
         release_notes_url: release.html_url,
+        ...(notes ? { notes } : {}),
         manifest: trimManifestSnapshot(manifest),
       },
     ],

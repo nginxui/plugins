@@ -18,7 +18,7 @@ import { createHash } from 'node:crypto'
 import { parseGithubRepoUrl, listReleases, fetchRawFile, downloadBinary } from './github.mjs'
 import { platformsFromManifest, trimManifestSnapshot } from './manifest-snapshot.mjs'
 import { findPortableAsset, buildDownloadsMap } from './release-assets.mjs'
-import { channelToSet, missingReleases, sortReleases, tagVersion } from './releases.mjs'
+import { channelToSet, missingReleases, releaseNotes, sortReleases, tagVersion } from './releases.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const PLUGINS_DIR = path.join(ROOT, 'plugins')
@@ -51,6 +51,7 @@ async function buildNewRelease(entry, ghRelease, manifest, token) {
   // Only a prerelease that reads as stable by its version needs a channel,
   // a host infers the channel of every other version.
   const channel = channelToSet(version, ghRelease)
+  const notes = releaseNotes(ghRelease.body, ghRelease.html_url)
 
   return {
     version,
@@ -62,6 +63,7 @@ async function buildNewRelease(entry, ghRelease, manifest, token) {
     ...(downloadUrl ? { download_url: downloadUrl } : {}),
     ...(sha256 ? { sha256 } : {}),
     release_notes_url: ghRelease.html_url,
+    ...(notes ? { notes } : {}),
     ...(channel ? { channel } : {}),
     manifest: trimManifestSnapshot(manifest),
   }

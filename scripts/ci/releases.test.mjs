@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { listReleases } from './github.mjs'
-import { channelToSet, inferChannel, missingReleases, sortReleases, tagVersion } from './releases.mjs'
+import { channelToSet, inferChannel, keepRecentNotes, MAX_NOTES_LENGTH, missingReleases, releaseNotes, sortReleases, tagVersion } from './releases.mjs'
 
 const gh = (tag, extra = {}) => ({ tag_name: tag, draft: false, prerelease: false, ...extra })
 
@@ -80,4 +80,26 @@ test('listReleases returns nothing for a repository without releases', async () 
 test('listReleases reports a failing request', async () => {
   const fakeFetch = async () => ({ ok: false, status: 403, json: async () => ({}), text: async () => 'rate limited' })
   await assert.rejects(listReleases('o', 'r', undefined, fakeFetch), /HTTP 403/)
+})
+
+test('releaseNotes keeps a short body and cuts a long one at a line break', () => {
+  assert.equal(releaseNotes('', 'https://x/r'), undefined)
+  assert.equal(releaseNotes(' \r\n ', 'https://x/r'), undefined)
+  assert.equal(releaseNotes('### Features\r\n\r\n- One\r\n', 'https://x/r'), '### Features\n\n- One')
+
+  const line = `- ${'a'.repeat(98)}\n`
+  const notes = releaseNotes(line.repeat(100), 'https://x/r')
+  assert.ok(notes.length <= MAX_NOTES_LENGTH)
+  assert.ok(notes.endsWith('\n\n[Full release notes](https://x/r)'))
+  const kept = notes.slice(0, notes.indexOf('\n\n[Full'))
+  assert.ok(kept.split('\n').every(l => l === line.trimEnd()), 'cut inside a line')
+})
+
+test('keepRecentNotes drops the notes of all but the newest releases', () => {
+  const releases = ['1.0.0', '1.2.0', '1.10.0', '1.3.0', '2.0.0-beta.1', '1.1.0']
+    .map(version => ({ version, notes: `notes ${version}` }))
+  const trimmed = keepRecentNotes(releases, 3)
+  assert.deepEqual(trimmed.map(r => r.version), releases.map(r => r.version))
+  assert.deepEqual(trimmed.filter(r => r.notes).map(r => r.version), ['1.10.0', '1.3.0', '2.0.0-beta.1'])
+  assert.ok(releases.every(r => r.notes), 'the input is left as it was')
 })

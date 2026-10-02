@@ -12,6 +12,7 @@
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import { keepRecentNotes } from './ci/releases.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const PLUGINS_DIR = path.join(ROOT, 'plugins')
@@ -84,7 +85,8 @@ export function buildIndex() {
   const document = { schema_version: SCHEMA_VERSION, name: CATALOG_NAME, icon: CATALOG_ICON }
   if (updatedAt)
     document.updated_at = updatedAt
-  document.plugins = plugins
+  // Only the newest releases keep their notes, the older ones keep the link.
+  document.plugins = plugins.map(entry => (entry.releases ? { ...entry, releases: keepRecentNotes(entry.releases) } : entry))
   return document
 }
 
