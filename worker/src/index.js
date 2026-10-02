@@ -1,6 +1,5 @@
 // Receives the release webhooks of the catalog GitHub App and starts the
-// deploy of the catalog when a plugin it lists publishes, edits or deletes a
-// release. The deploy reads everything from GitHub itself, so a delivery only
+// deploy of the catalog when a plugin it lists publishes a release. The deploy reads everything from GitHub itself, so a delivery only
 // decides when it runs.
 //
 // Settings (wrangler.toml and `wrangler secret put`):
@@ -21,9 +20,10 @@
 
 const API = 'https://api.github.com'
 const USER_AGENT = 'nginxui-plugins-release-hook'
-// Actions that change what the catalog lists. "released" and "prereleased"
-// arrive together with "published" and add nothing.
-const RELEASE_ACTIONS = new Set(['published', 'edited', 'deleted', 'unpublished'])
+// Only a published release starts the deploy. "released" and "prereleased"
+// arrive together with it and add nothing; an edited, unpublished or deleted
+// release reaches the catalog with the hourly deploy.
+const RELEASE_ACTIONS = new Set(['published'])
 // Seconds a repository waits before its events start the deploy again.
 const COOLDOWN_SECONDS = 60
 // Run states of a deploy that has not started yet.

@@ -114,7 +114,8 @@ test('a forged, a draft or another event starts nothing', async () => {
   assert.equal((await worker.fetch(delivery('release', released('https://github.com/example/plugin'), sign('other')), env)).status, 401)
   const draft = { ...released('https://github.com/example/plugin'), release: { draft: true } }
   assert.equal((await worker.fetch(delivery('release', draft), env)).status, 202)
-  assert.equal((await worker.fetch(delivery('release', { ...released('https://github.com/example/plugin'), action: 'created' }), env)).status, 202)
+  for (const action of ['created', 'edited', 'deleted', 'unpublished', 'released', 'prereleased'])
+    assert.equal((await worker.fetch(delivery('release', { ...released('https://github.com/example/plugin'), action }), env)).status, 202, action)
   assert.equal((await worker.fetch(delivery('push', {}), env)).status, 202)
   assert.equal((await worker.fetch(delivery('ping', {}), env)).status, 200)
   assert.equal(calls.length, 0)

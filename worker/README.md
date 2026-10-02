@@ -1,8 +1,8 @@
 # Release webhook
 
 A Cloudflare Worker that starts the deploy of the catalog as soon as a listed
-plugin publishes, edits or deletes a GitHub Release. Without it the hourly
-deploy picks the release up within the hour.
+plugin publishes a GitHub Release. Without it the hourly deploy picks the
+release up within the hour, as it does for an edited or deleted release.
 
 ```
 plugin repository --release event--> catalog GitHub App --webhook--> this Worker

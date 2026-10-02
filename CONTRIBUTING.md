@@ -122,11 +122,18 @@ caches a source for up to one hour, or refreshes at once for a user who hits
 ## Keeping your listing up to date
 
 Nothing to do: the deploy reads your GitHub Releases every hour and lists a
-new one as soon as its packages verify. To have a release listed within
-minutes instead, install the catalog GitHub App on your plugin repository. It
-only reads your releases, see [`worker/README.md`](worker/README.md). Prereleases are listed too, on the
+new one as soon as its packages verify. Prereleases are listed too, on the
 channel their version names, see the channel rules in the README. A draft
 release is ignored until it is published.
+
+To have a release listed within minutes of publishing it instead, install the
+[NGINX UI Plugin Catalog](https://github.com/apps/nginx-ui-plugin-catalog)
+GitHub App: choose the account that owns the plugin repository, select only
+that repository, and install. Publishing a release then starts the deploy of
+the catalog at once. The App only receives release events and holds no
+private key, so it cannot read your repository, and it does nothing for a
+repository the catalog does not list yet. See
+[`worker/README.md`](worker/README.md).
 
 A listed release is pinned: replacing a package of it on GitHub fails the
 deploy instead of changing what hosts download. Publish a new version
