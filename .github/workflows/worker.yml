@@ -2,7 +2,8 @@ name: Worker
 
 # Tests the release webhook in worker/ on every change and deploys it from
 # main. Its secrets live in Cloudflare (see worker/README.md), this workflow
-# only needs CLOUDFLARE_API_TOKEN (Workers edit) and CLOUDFLARE_ACCOUNT_ID.
+# only needs CLOUDFLARE_API_TOKEN (Workers edit) and CLOUDFLARE_ACCOUNT_ID of
+# the "cloudflare" environment.
 on:
   push:
     branches: [main]
@@ -17,6 +18,9 @@ permissions:
 jobs:
   worker:
     runs-on: ubuntu-latest
+    # Holds CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID; pull requests only
+    # run the tests and need neither.
+    environment: ${{ github.event_name != 'pull_request' && 'cloudflare' || '' }}
     defaults:
       run:
         working-directory: worker

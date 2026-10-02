@@ -10,8 +10,9 @@ name: Deploy
 # that builds the same catalog and keyring as the published ones deploys
 # nothing.
 #
-# Secrets: CLOUDFLARE_API_TOKEN (Pages edit), CLOUDFLARE_ACCOUNT_ID, and the
-# organization PLUGIN_SIGNING_KEY that signs v1/partners.json. Variables:
+# Secrets: CLOUDFLARE_API_TOKEN (Pages edit) and CLOUDFLARE_ACCOUNT_ID of the
+# "cloudflare" environment, and the organization PLUGIN_SIGNING_KEY that
+# signs v1/partners.json. Variables:
 # CLOUDFLARE_PAGES_PROJECT (default nginx-ui-plugins), CATALOG_URL (default
 # https://plugins.nginxui.com) and PLUGIN_SIGNING_PUBLIC_KEY.
 on:
@@ -40,6 +41,8 @@ jobs:
   deploy:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # Holds CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID.
+    environment: cloudflare
     steps:
       - uses: actions/checkout@v7
         with:
