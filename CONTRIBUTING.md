@@ -122,7 +122,9 @@ caches a source for up to one hour, or refreshes at once for a user who hits
 ## Keeping your listing up to date
 
 Nothing to do: the deploy reads your GitHub Releases every hour and lists a
-new one as soon as its packages verify. Prereleases are listed too, on the
+new one as soon as its packages verify. To have a release listed within
+minutes instead, install the catalog GitHub App on your plugin repository. It
+only reads your releases, see [`worker/README.md`](worker/README.md). Prereleases are listed too, on the
 channel their version names, see the channel rules in the README. A draft
 release is ignored until it is published.
 

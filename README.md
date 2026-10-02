@@ -17,6 +17,8 @@ partners/<name>.json  One JSON file per partner organization: its minisign
 schema/               JSON Schema (draft 2020-12) for every file shape.
 assets/, _headers     Served as they are: the catalog icon and the cache and
                        content type headers of Cloudflare Pages.
+worker/               The release webhook, a Cloudflare Worker that starts
+                       the deploy when a listed plugin releases.
 scripts/              No-dependency Node.js scripts: build, validate, and the
                        small pieces of automation the GitHub Actions in
                        .github/workflows/ call into.
@@ -76,9 +78,11 @@ snapshot of the tag, the release notes and the channel. Then:
   entry's `yanked` stays in the catalog marked yanked, and hosts no longer
   offer it.
 
-The deploy runs on every change of `main`, every hour, by hand, and on a
-`plugin-released` repository dispatch, so a plugin release reaches the
-catalog within the hour without anyone touching this repository.
+The deploy runs on every change of `main`, every hour and by hand, so a
+plugin release reaches the catalog within the hour without anyone touching
+this repository. When the plugin repository has the catalog GitHub App
+installed, the release webhook in `worker/` starts the deploy right away, see
+[`worker/README.md`](worker/README.md).
 
 `v1/index.json` is a `CatalogDocument`:
 

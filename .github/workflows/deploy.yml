@@ -5,9 +5,10 @@ name: Deploy
 # come from the GitHub Releases of every plugin, and the published catalog
 # pins the packages of the releases it already lists.
 #
-# Runs on a change of main, every hour, by hand, and on a "plugin-released"
-# repository dispatch the release webhook sends. A scheduled run that builds
-# the same catalog and keyring as the published ones deploys nothing.
+# Runs on a change of main, every hour, and by hand. The release webhook in
+# worker/ runs it by hand as soon as a listed plugin releases. A scheduled run
+# that builds the same catalog and keyring as the published ones deploys
+# nothing.
 #
 # Secrets: CLOUDFLARE_API_TOKEN (Pages edit), CLOUDFLARE_ACCOUNT_ID, and the
 # organization PLUGIN_SIGNING_KEY that signs v1/partners.json. Variables:
@@ -24,8 +25,6 @@ on:
         description: Build without a published catalog, only for the very first deploy
         type: boolean
         default: false
-  repository_dispatch:
-    types: [plugin-released]
 
 permissions:
   contents: read

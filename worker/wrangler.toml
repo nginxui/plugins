@@ -1,0 +1,16 @@
+# The release webhook of the catalog, see README.md next to this file.
+name = "nginxui-plugins-release-hook"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[vars]
+CATALOG_URL = "https://plugins.nginxui.com"
+CATALOG_REPO = "nginxui/plugins"
+DEPLOY_WORKFLOW = "deploy.yml"
+DEPLOY_REF = "main"
+
+# Secrets, set once with `npx wrangler secret put <NAME>`:
+#   WEBHOOK_SECRET          webhook secret of the catalog GitHub App
+#   DEPLOY_APP_ID           id of the deploy GitHub App
+#   DEPLOY_APP_PRIVATE_KEY  private key of the deploy GitHub App

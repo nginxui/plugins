@@ -1,0 +1,5 @@
+{
+  "name": "nginxui-plugins-release-hook",
+  "private": true,
+  "type": "module"
+}
