@@ -31,7 +31,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # A real user token would be needed to trigger further workflows
           # from this push; the default GITHUB_TOKEN is fine here since
@@ -40,7 +40,7 @@ jobs:
           # scripts/build-partners.mjs the time of the last partners/ change.
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "20"
 
