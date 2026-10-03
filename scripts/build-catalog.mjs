@@ -55,6 +55,7 @@ import { changedDigests, releaseFromGithub, releaseText } from './ci/release-rec
 import { assetDigest, findPlatformAssets, findPortableAsset } from './ci/release-assets.mjs'
 import { inferChannel, keepRecentNotes, sortReleases, tagVersion } from './ci/releases.mjs'
 import { compareSemver, isSemver } from './ci/semver.mjs'
+import { deriveListing, displayRelease, listingChanges } from './ci/listing.mjs'
 import { verifyRelease } from './ci/verify-release.mjs'
 import { validateAgainstSchemaFile } from './lib/schema-validator.mjs'
 import { SPEC_SCHEMAS, specSchema } from './lib/spec.mjs'
@@ -118,6 +119,21 @@ export function newestReleaseTimestamp(plugins) {
   return newest
 }
 
+/** The bytes of a file of the published site, null when it cannot be read. */
+async function fetchPublishedFile(site, file) {
+  if (!/^https?:\/\//.test(site)) {
+    const local = path.join(site, file)
+    return existsSync(local) ? readFileSync(local) : null
+  }
+  try {
+    const response = await fetch(`${site.replace(/\/+$/, '')}/${file}`)
+    return response.ok ? Buffer.from(await response.arrayBuffer()) : null
+  }
+  catch {
+    return null
+  }
+}
+
 /** GET a JSON document of the published site. null when the site answers 404,
  * a throw on any other failure: building without the published catalog would
  * drop the digests it pins. */
@@ -164,8 +180,10 @@ function releaseFingerprint(entry, ghRelease, version) {
  * The releases of one entry. published is the entry of the published catalog
  * or undefined. failed maps "<id>@<version>" to the fingerprint of a
  * release that was left out and is updated in place. Returns
- * { releases, provides, failures }: failures are reasons the build must stop
- * for, a new release that cannot be read or does not verify is only left out.
+ * { releases, provides, failures, repo, tags, icons }: failures are reasons
+ * the build must stop for, a new release that cannot be read or does not
+ * verify is only left out. tags maps a version to its tag, icons a version
+ * verified in this build to the icon of its package.
  */
 async function entryReleases(entry, published, { token, verifyNewest, failed, visited, repin }) {
   const failures = []
@@ -176,10 +194,12 @@ async function entryReleases(entry, published, { token, verifyNewest, failed, vi
       pinned.delete(version)
     }
   }
+  const tags = new Map()
+  const icons = new Map()
   const repo = parseGithubRepoUrl(entry.repository_url)
   if (!repo) {
     failures.push(`${entry.id}: repository_url ${JSON.stringify(entry.repository_url)} is not a github.com repository`)
-    return { releases: [], failures }
+    return { releases: [], failures, tags, icons }
   }
 
   let ghReleases
@@ -189,7 +209,7 @@ async function entryReleases(entry, published, { token, verifyNewest, failed, vi
   catch (err) {
     // Keep what is listed rather than emptying the entry over a network error.
     console.warn(`::warning title=${entry.id}::cannot list the releases of ${repo.owner}/${repo.repo}, keeping the published ones: ${err.message}`)
-    return { releases: [...pinned.values()], provides: published?.provides, failures }
+    return { releases: [...pinned.values()], provides: published?.provides, failures, repo, tags, icons }
   }
 
   const releases = []
@@ -201,6 +221,7 @@ async function entryReleases(entry, published, { token, verifyNewest, failed, vi
     if (!isSemver(version) || seen.has(version))
       continue
     seen.add(version)
+    tags.set(version, ghRelease.tag_name)
 
     const listed = pinned.get(version)
     if (listed) {
@@ -227,29 +248,36 @@ async function entryReleases(entry, published, { token, verifyNewest, failed, vi
       continue
     }
     const record = built.release
-    if (!await verifyRelease(entry, record)) {
+    const verified = await verifyRelease(entry, record)
+    if (!verified.ok) {
       failed[key] = fingerprint
       console.warn(`::warning title=${entry.id}::${version} is left out, a package does not verify`)
       continue
     }
     delete failed[key]
+    if (verified.signer)
+      record.signer = verified.signer
+    if (verified.icon)
+      icons.set(version, verified.icon)
     releases.push(record)
     declared.set(version, built.dns01)
   }
 
   const sorted = sortReleases(releases)
   const newest = sorted.at(-1)
-  if (verifyNewest && newest && pinned.has(newest.version) && !await verifyRelease(entry, newest))
+  if (verifyNewest && newest && pinned.has(newest.version) && !(await verifyRelease(entry, newest)).ok)
     failures.push(`${entry.id} ${newest.version}: a package does not verify`)
 
+  // A release signed by a withdrawn signing key is yanked like a listed one.
   const yanked = new Set(entry.yanked ?? [])
+  const revoked = new Set((entry.revoked_signers ?? []).map(id => id.toUpperCase()))
   for (const release of sorted) {
-    if (yanked.has(release.version))
+    if (yanked.has(release.version) || revoked.has(release.signer))
       release.yanked = true
     else
       delete release.yanked
   }
-  return { releases: keepRecentNotes(sorted).map(ordered), provides: providesOf(sorted, declared, published?.provides), failures }
+  return { releases: keepRecentNotes(sorted).map(ordered), provides: providesOf(sorted, declared, published?.provides), failures, repo, tags, icons }
 }
 
 /** Whether a published provides lists code as present in version. */
@@ -330,7 +358,7 @@ export function providesOf(releases, declared, published) {
 }
 
 // Member order of a release record, so a kept and a new record serialize alike.
-const RELEASE_KEYS = ['version', 'released_at', 'api_version', 'min_nginx_ui_version', 'platforms', 'downloads', 'download_url', 'sha256', 'release_notes_url', 'notes', 'yanked', 'channel', 'manifest']
+const RELEASE_KEYS = ['version', 'released_at', 'api_version', 'min_nginx_ui_version', 'platforms', 'downloads', 'download_url', 'sha256', 'release_notes_url', 'notes', 'yanked', 'channel', 'signer', 'manifest']
 
 function ordered(release) {
   const out = {}
@@ -341,11 +369,37 @@ function ordered(release) {
   return out
 }
 
-/** The catalog entry: the source entry without yanked, with what it provides
- * and its releases. */
-function catalogEntry(entry, releases, provides) {
-  const { yanked: _yanked, ...rest } = entry
-  return { ...rest, ...(provides ? { provides } : {}), releases }
+// Member order of a catalog entry, so every build serializes it alike.
+const ENTRY_KEYS = ['id', 'name', 'description', 'author', 'author_public_key', 'homepage_url', 'repository_url', 'readme_url', 'icon_url', 'screenshots', 'categories', 'capabilities', 'license', 'trust', 'revoked_signers']
+
+/** The catalog entry: the source entry without yanked, with the listing its
+ * display release gives, what it provides and its releases. */
+function catalogEntry(entry, listing, releases, provides) {
+  const merged = { ...entry, ...listing }
+  const out = {}
+  for (const key of ENTRY_KEYS) {
+    if (merged[key] !== undefined)
+      out[key] = merged[key]
+  }
+  return { ...out, ...(provides ? { provides } : {}), releases }
+}
+
+/** Lists the entries whose listing differs from the published one, in the log
+ * and in the job summary, for the maintainers to look over. */
+function reportListingChanges(plugins, publishedById) {
+  const rows = []
+  for (const plugin of plugins) {
+    const published = publishedById.get(plugin.id)
+    const fields = listingChanges(plugin, published)
+    if (fields.length === 0)
+      continue
+    const shown = displayRelease(plugin.releases)?.version ?? 'none'
+    console.log(`listing of ${plugin.id} changed: ${fields.join(', ')}`)
+    rows.push(`| \`${plugin.id}\` | ${published ? 'changed' : 'new'} | ${shown} | ${fields.join(', ')} |`)
+  }
+  if (rows.length === 0 || !process.env.GITHUB_STEP_SUMMARY)
+    return
+  appendFileSync(process.env.GITHUB_STEP_SUMMARY, ['## Listing changes', '', '| Plugin | Listing | Shown release | Fields |', '| --- | --- | --- | --- |', ...rows, ''].join('\n'))
 }
 
 function serialize(document) {
@@ -383,12 +437,32 @@ async function main() {
     : 'building without a published catalog')
   const publishedById = new Map((publishedIndex?.plugins ?? []).map(plugin => [plugin.id, plugin]))
 
+  // Where the catalog is served, which the icons it serves are addressed by.
+  const servedAt = site && /^https?:\/\//.test(site) ? site : DEFAULT_SITE
   const plugins = []
   const failures = []
+  const iconFiles = new Map()
   for (const entry of loadEntries(values.only)) {
-    const result = await entryReleases(entry, publishedById.get(entry.id), { token, verifyNewest: values['verify-newest'], failed, visited, repin })
+    const published = publishedById.get(entry.id)
+    const result = await entryReleases(entry, published, { token, verifyNewest: values['verify-newest'], failed, visited, repin })
     failures.push(...result.failures)
-    plugins.push(catalogEntry(entry, result.releases, result.provides))
+    const listing = await deriveListing(entry, result.releases, published, { repo: result.repo, tags: result.tags, icons: result.icons, site: servedAt })
+    for (const warning of listing.warnings)
+      console.warn(`::warning title=${entry.id}::${warning}`)
+    if (listing.icon?.from) {
+      const bytes = site ? await fetchPublishedFile(site, listing.icon.path) : null
+      if (bytes) {
+        listing.icon.bytes = bytes
+      }
+      else {
+        console.warn(`::warning title=${entry.id}::cannot read ${listing.icon.from} from the published site, the listing has no icon`)
+        delete listing.fields.icon_url
+        listing.icon = undefined
+      }
+    }
+    if (listing.icon)
+      iconFiles.set(listing.icon.path, listing.icon.bytes)
+    plugins.push(catalogEntry(entry, listing.fields, result.releases, result.provides))
     console.log(`${entry.id}: ${result.releases.map(release => release.version).join(', ') || 'no release'}`)
   }
 
@@ -443,12 +517,17 @@ async function main() {
     mkdirSync(path.dirname(path.join(out, file)), { recursive: true })
     writeFileSync(path.join(out, file), html)
   }
+  for (const [file, bytes] of iconFiles) {
+    mkdirSync(path.dirname(path.join(out, file)), { recursive: true })
+    writeFileSync(path.join(out, file), bytes)
+  }
   writeFileSync(path.join(out, 'v1', 'index.json'), serialize(index))
   writeFileSync(path.join(out, 'v1', 'partners.json'), serializeKeyring(keyring))
 
   const changed = JSON.stringify(index) !== JSON.stringify(publishedIndex)
     || JSON.stringify(keyring) !== JSON.stringify(publishedKeyring)
   console.log(`wrote ${out} (${plugins.length} plugin(s), ${changed ? 'changed' : 'unchanged'})`)
+  reportListingChanges(plugins, publishedById)
   if (process.env.GITHUB_OUTPUT)
     appendFileSync(process.env.GITHUB_OUTPUT, `changed=${changed}\n`)
 }

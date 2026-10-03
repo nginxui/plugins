@@ -8,7 +8,6 @@
   "required": [
     "id",
     "name",
-    "description",
     "author",
     "repository_url",
     "trust"
@@ -18,10 +17,12 @@
       "$ref": "#/$defs/pluginId"
     },
     "name": {
-      "$ref": "#/$defs/localizedText"
+      "$ref": "#/$defs/localizedText",
+      "description": "The listed name. en stays as reviewed, other languages override the translations of the plugin.json of the release the entry is listed with."
     },
     "description": {
-      "$ref": "#/$defs/localizedText"
+      "$ref": "#/$defs/localizedText",
+      "description": "Overrides the description of the plugin.json of the release the entry is listed with, per language."
     },
     "author": {
       "type": "string",
@@ -34,20 +35,23 @@
       "minLength": 1
     },
     "homepage_url": {
-      "$ref": "#/$defs/httpsUrl"
+      "$ref": "#/$defs/httpsUrl",
+      "description": "Overrides homepage_url of the plugin.json of the release the entry is listed with."
     },
     "repository_url": {
       "$ref": "#/$defs/httpsUrl"
     },
     "readme_url": {
-      "$ref": "#/$defs/httpsUrl"
+      "$ref": "#/$defs/httpsUrl",
+      "description": "Overrides README.md at the tag of the release the entry is listed with."
     },
     "icon_url": {
-      "$ref": "#/$defs/httpsUrl"
+      "$ref": "#/$defs/httpsUrl",
+      "description": "Overrides the icon inside the package of the release the entry is listed with, which the catalog serves."
     },
     "screenshots": {
       "type": "array",
-      "description": "Images of the plugin in use, in display order. PNG, JPEG or WebP, about 16:10 at 1280 to 1920 pixels wide.",
+      "description": "Overrides the screenshots of the plugin.json of the release the entry is listed with. Images of the plugin in use, in display order. PNG, JPEG or WebP, about 16:10 at 1280 to 1920 pixels wide.",
       "maxItems": 8,
       "items": {
         "$ref": "#/$defs/screenshot"
@@ -80,6 +84,15 @@
     },
     "trust": {
       "$ref": "#/$defs/trust"
+    },
+    "revoked_signers": {
+      "type": "array",
+      "description": "Ids of the signing keys the author withdrew. A release one of them signed is yanked, and hosts treat the packages it signed as unsigned.",
+      "items": {
+        "type": "string",
+        "pattern": "^[0-9A-F]{16}$"
+      },
+      "uniqueItems": true
     },
     "yanked": {
       "type": "array",

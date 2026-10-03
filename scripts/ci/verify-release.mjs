@@ -10,8 +10,13 @@
 //    every digest in plugin.sums matches.
 // 3. plugin.sums.minisig verifies against the key the entry earns its trust
 //    with: the official plugin key in PLUGIN_SIGNING_PUBLIC_KEY for an
-//    official entry (SKIP when that variable is empty), author_public_key for
-//    a community entry.
+//    official entry (SKIP when that variable is empty). A community package
+//    carries a signer certificate (plugin.signer and plugin.signer.minisig)
+//    that plugin.sums lists, whose trusted comment reads signer:<id>, that
+//    author_public_key verifies and whose key is not in revoked_signers, and
+//    plugin.sums.minisig is signed by the certified key. A community package
+//    signed by author_public_key itself is refused: the catalog lists only
+//    packages a replaceable signing key signed.
 // 4. For a verified entry carrying a partner certificate (plugin.partner and
 //    plugin.partner.minisig at its root): plugin.sums lists both files, the
 //    trusted comment reads partner:<name>, optionally followed by
@@ -21,6 +26,10 @@
 //    empty), and plugin.sums.minisig is signed by the certified key. Without a
 //    certificate, plugin.sums.minisig must be signed by a key listed in
 //    partners/ that is neither revoked nor expired.
+//
+// The key that signed plugin.sums is the signer of the release, the same for
+// every package. The icon a package's plugin.json names is read from the
+// first package, for the catalog to serve.
 //
 // scripts/build-catalog.mjs runs it on every release it adds to the catalog.
 // tar must be on PATH, digests and signatures are checked with node:crypto.
@@ -45,6 +54,11 @@ const SUMS = 'plugin.sums'
 const SIGNATURE = 'plugin.sums.minisig'
 const PARTNER = 'plugin.partner'
 const PARTNER_SIGNATURE = 'plugin.partner.minisig'
+const SIGNER = 'plugin.signer'
+const SIGNER_SIGNATURE = 'plugin.signer.minisig'
+// Icon types the catalog serves and the largest it takes.
+const ICON_TYPES = { '.png': 'png', '.webp': 'webp', '.svg': 'svg' }
+const MAX_ICON_BYTES = 256 * 1024
 const SUMS_LINE = /^([0-9a-f]{64}) {2}(.+)$/
 const CERTIFICATE_COMMENT = /^partner:([^;]+)(?:;expires:(\S+))?$/
 
@@ -262,8 +276,117 @@ function verifyPartner(label, dir, listed) {
   return true
 }
 
+/**
+ * Checks how a community package earns its trust, see the module comment
+ * (step 3). Returns false on failure.
+ */
+function verifyCommunity(entry, label, dir, listed) {
+  const primary = publicKeyLine(entry.author_public_key ?? '')
+  if (!primary) {
+    log('FAIL', `${label}: ${entry.id} is a community entry without an author_public_key`)
+    return false
+  }
+  const hasKey = isRegularFile(dir, SIGNER)
+  const hasCertificate = isRegularFile(dir, SIGNER_SIGNATURE)
+  if (!hasKey || !hasCertificate) {
+    const missing = !hasKey && !hasCertificate ? `${SIGNER} and ${SIGNER_SIGNATURE} are` : `${hasKey ? SIGNER_SIGNATURE : SIGNER} is`
+    log('FAIL', `${label}: ${missing} missing. A community package is signed by a signing key that author_public_key certified, see nginx-ui plugin key init`)
+    return false
+  }
+  if (!listed.has(SIGNER) || !listed.has(SIGNER_SIGNATURE)) {
+    log('FAIL', `${label}: ${SUMS} must list both ${SIGNER} and ${SIGNER_SIGNATURE}`)
+    return false
+  }
+
+  const signerBytes = readFileSync(path.join(dir, SIGNER))
+  const certificateText = readFileSync(path.join(dir, SIGNER_SIGNATURE), 'utf8')
+  let signerKey
+  let certificate
+  try {
+    signerKey = parsePublicKey(signerBytes.toString('utf8'))
+  }
+  catch (err) {
+    log('FAIL', `${label}: ${SIGNER} is not a minisign public key: ${err.message}`)
+    return false
+  }
+  try {
+    certificate = parseSignature(certificateText)
+  }
+  catch (err) {
+    log('FAIL', `${label}: ${SIGNER_SIGNATURE}: ${err.message}`)
+    return false
+  }
+  if (certificate.trustedComment !== `signer:${entry.id}`) {
+    log('FAIL', `${label}: ${SIGNER_SIGNATURE} trusted comment ${JSON.stringify(certificate.trustedComment)} is not signer:${entry.id}`)
+    return false
+  }
+  try {
+    verifySignature(primary, signerBytes, certificateText)
+  }
+  catch (err) {
+    log('FAIL', `${label}: the signer certificate does not verify against author_public_key: ${err.message}`)
+    return false
+  }
+  if ((entry.revoked_signers ?? []).some(id => id.toUpperCase() === signerKey.id)) {
+    log('FAIL', `${label}: signing key ${signerKey.id} is in revoked_signers`)
+    return false
+  }
+  try {
+    verifySignature(signerKey.line, readFileSync(path.join(dir, SUMS)), readFileSync(path.join(dir, SIGNATURE), 'utf8'))
+  }
+  catch (err) {
+    log('FAIL', `${label}: ${SIGNATURE} is not signed by the key in ${SIGNER}: ${err.message}`)
+    return false
+  }
+  log('OK', `${label}: ${SIGNATURE} verifies against signing key ${signerKey.id}, certified by author_public_key`)
+  return true
+}
+
+/** The key id that signed plugin.sums, undefined when it does not parse. */
+function sumsSigner(dir) {
+  try {
+    return parseSignature(readFileSync(path.join(dir, SIGNATURE), 'utf8')).keyId
+  }
+  catch {
+    return undefined
+  }
+}
+
+/**
+ * The icon plugin.json at the package root names, as { type, bytes }, or
+ * undefined after saying why there is none. The package is verified, so the
+ * file is the author's.
+ */
+function packageIcon(label, dir) {
+  let iconPath
+  try {
+    iconPath = JSON.parse(readFileSync(path.join(dir, 'plugin.json'), 'utf8')).icon_path
+  }
+  catch {
+    return undefined
+  }
+  if (!iconPath)
+    return undefined
+  const type = ICON_TYPES[path.extname(iconPath).toLowerCase()]
+  const segments = iconPath.split('/')
+  if (!type || iconPath.startsWith('/') || iconPath.includes('\\') || segments.some(s => s === '' || s === '.' || s === '..')) {
+    log('WARN', `${label}: icon_path ${JSON.stringify(iconPath)} is not a PNG, WebP or SVG file inside the package, the listing has no icon`)
+    return undefined
+  }
+  if (!isRegularFile(dir, iconPath)) {
+    log('WARN', `${label}: icon_path ${JSON.stringify(iconPath)} is not in the package, the listing has no icon`)
+    return undefined
+  }
+  const bytes = readFileSync(path.join(dir, iconPath))
+  if (bytes.length > MAX_ICON_BYTES) {
+    log('WARN', `${label}: the icon is ${bytes.length} bytes, more than ${MAX_ICON_BYTES}, the listing has no icon`)
+    return undefined
+  }
+  return { type, bytes }
+}
+
 /** Checks one extracted package's signature files. Returns false on failure. */
-function verifyContents(entry, label, dir) {
+export function verifyContents(entry, label, dir) {
   for (const name of [SUMS, SIGNATURE]) {
     if (!existsSync(path.join(dir, name)) || !lstatSync(path.join(dir, name)).isFile()) {
       log('FAIL', `${label}: ${name} is missing from the package root, the package is unsigned`)
@@ -301,61 +424,52 @@ function verifyContents(entry, label, dir) {
 
   if (entry.trust === 'verified')
     return verifyPartner(label, dir, listed)
-
-  let key
-  let keyName
-  if (entry.trust === 'official') {
-    key = (process.env.PLUGIN_SIGNING_PUBLIC_KEY ?? '').trim()
-    keyName = 'the official plugin key'
-    if (!key) {
-      log('SKIP', `${label}: ${SIGNATURE} check, PLUGIN_SIGNING_PUBLIC_KEY is not set`)
-      return true
-    }
-  }
-  else if (entry.trust === 'community') {
-    key = publicKeyLine(entry.author_public_key ?? '')
-    keyName = 'author_public_key'
-    if (!key) {
-      log('FAIL', `${label}: ${entry.id} is a community entry without an author_public_key`)
-      return false
-    }
-  }
-  else {
+  if (entry.trust === 'community')
+    return verifyCommunity(entry, label, dir, listed)
+  if (entry.trust !== 'official') {
     log('FAIL', `${label}: unknown trust ${JSON.stringify(entry.trust)}`)
     return false
+  }
+
+  const key = (process.env.PLUGIN_SIGNING_PUBLIC_KEY ?? '').trim()
+  if (!key) {
+    log('SKIP', `${label}: ${SIGNATURE} check, PLUGIN_SIGNING_PUBLIC_KEY is not set`)
+    return true
   }
   try {
     verifySignature(key, readFileSync(path.join(dir, SUMS)), readFileSync(path.join(dir, SIGNATURE), 'utf8'))
   }
   catch (err) {
-    log('FAIL', `${label}: ${SIGNATURE} does not verify against ${keyName}: ${err.message}`)
+    log('FAIL', `${label}: ${SIGNATURE} does not verify against the official plugin key: ${err.message}`)
     return false
   }
-  log('OK', `${label}: ${SIGNATURE} verifies against ${keyName}`)
+  log('OK', `${label}: ${SIGNATURE} verifies against the official plugin key`)
   return true
 }
 
 /**
  * Verifies one package of a release. `pkg` is either the portable package
  * (built from download_url and sha256) or one entry of "downloads", and
- * `label` names it in log output. Returns false on any failure.
+ * `label` names it in log output. Returns { ok, signer, icon }: the key id
+ * that signed plugin.sums and, when withIcon, the icon of the package.
  */
-async function verifyPackage(entry, label, pkg) {
+async function verifyPackage(entry, label, pkg, withIcon) {
+  const failed = { ok: false }
   const asset = await tryDownload(pkg.url)
   if (!asset) {
     log('FAIL', `${label}: cannot download ${pkg.url}`)
-    return false
+    return failed
   }
   console.log(`  ${label}: downloaded ${asset.length} bytes from ${pkg.url}`)
 
   if (!pkg.sha256) {
     log('FAIL', `${label}: the release has no sha256 for ${pkg.url}`)
-    return false
+    return failed
   }
   const digest = createHash('sha256').update(asset).digest('hex')
   if (digest !== pkg.sha256.toLowerCase()) {
     log('FAIL', `${label}: sha256 mismatch: the release says ${pkg.sha256}, the package hashes to ${digest}`)
-    return false
+    return failed
   }
   log('OK', `${label}: sha256 matches`)
 
@@ -369,9 +483,11 @@ async function verifyPackage(entry, label, pkg) {
     const extract = run('tar', ['-xzf', archive, '-C', root])
     if (!extract.ok) {
       log('FAIL', `${label}: could not extract the package:\n${extract.output}`)
-      return false
+      return failed
     }
-    return verifyContents(entry, label, root)
+    if (!verifyContents(entry, label, root))
+      return failed
+    return { ok: true, signer: sumsSigner(root), icon: withIcon ? packageIcon(label, root) : undefined }
   }
   finally {
     rmSync(dir, { recursive: true, force: true })
@@ -379,8 +495,10 @@ async function verifyPackage(entry, label, pkg) {
 }
 
 /**
- * Verifies every package of one catalog release of entry. Returns false when
- * any of them fails, a documented SKIP still counts as a pass.
+ * Verifies every package of one catalog release of entry. Returns
+ * { ok, signer, icon }: ok is false when any package fails, a documented SKIP
+ * still counts as a pass, signer is the key id that signed every package and
+ * icon the icon of the first package.
  */
 export async function verifyRelease(entry, release) {
   console.log(`verifying ${entry.id} ${release.version} (trust: ${entry.trust})`)
@@ -393,15 +511,25 @@ export async function verifyRelease(entry, release) {
 
   if (packages.length === 0) {
     log('FAIL', `${entry.id} ${release.version}: neither "download_url" nor "downloads", nothing to verify`)
-    return false
+    return { ok: false }
   }
 
-  let allOk = true
-  for (const [label, pkg] of packages) {
-    if (!await verifyPackage(entry, `${entry.id} ${release.version} ${label}`, pkg))
-      allOk = false
+  let ok = true
+  const signers = new Set()
+  let icon
+  for (const [index, [label, pkg]] of packages.entries()) {
+    const result = await verifyPackage(entry, `${entry.id} ${release.version} ${label}`, pkg, index === 0)
+    ok &&= result.ok
+    if (result.signer)
+      signers.add(result.signer)
+    if (index === 0)
+      icon = result.icon
   }
-  return allOk
+  if (ok && signers.size > 1) {
+    log('FAIL', `${entry.id} ${release.version}: the packages are signed by different keys (${[...signers].join(', ')})`)
+    ok = false
+  }
+  return { ok, signer: signers.size === 1 ? [...signers][0] : undefined, icon }
 }
 
 async function main() {
@@ -423,7 +551,7 @@ async function main() {
     log('SKIP', `${id} has no release${version ? ` ${version}` : ''} in ${indexPath}`)
     return
   }
-  if (!await verifyRelease(entry, release))
+  if (!(await verifyRelease(entry, release)).ok)
     process.exitCode = 1
 }
 

@@ -79,7 +79,16 @@ snapshot of the tag, the release notes and the channel. Then:
   the change. Its notes and channel follow the GitHub Release.
 - A release deleted on GitHub leaves the catalog. A version listed in the
   entry's `yanked` stays in the catalog marked yanked, and hosts no longer
-  offer it.
+  offer it. So does a release signed by a key listed in the entry's
+  `revoked_signers`; each release records the key that signed it as
+  `signer`.
+- The entry shows what the release it is listed with gives: the newest
+  stable release that is not yanked, else the newest one. Its `plugin.json`
+  gives the description, the name translations, the homepage and the
+  screenshots, the tag gives the README, and the package gives the icon,
+  which the catalog serves under `v1/icons/`. A field `plugins/<id>.json`
+  sets wins, and the English name always comes from there. The deploy lists
+  the entries whose listing changed in its job summary.
 
 The deploy runs on every change of `main`, every hour and by hand, so a
 plugin release reaches the catalog within the hour without anyone touching
@@ -150,7 +159,7 @@ packages install only when developer mode is on.
 | --- | --- | --- |
 | `official` | Published by the nginx-ui project. Reserved for `com.nginxui.*` plugins. | The official plugin key, pinned in every nginx-ui build (`internal/releasesign`). It is apart from the key that signs nginx-ui releases. |
 | `verified` | Published by a partner organization the maintainers vouch for, with a certificate in the package or a listing in the keyring. It makes no claim that anyone reviewed the source. | The partner's own key, certified by the official plugin key (`plugin.partner` and `plugin.partner.minisig` in the package) or listed in `v1/partners.json`. |
-| `community` | Signed by the author. Not reviewed; installing one requires the community switch (`plugin.allow_community_plugins`) and a confirmation in the UI. | The author's own minisign key, published in the entry's `author_public_key`. |
+| `community` | Signed by the author. Not reviewed; installing one requires the community switch (`plugin.allow_community_plugins`) and a confirmation in the UI. | A signing key of the author, certified in the package (`plugin.signer`) by the primary key the entry publishes as `author_public_key`. |
 
 The host derives the level from the key that signed `plugin.sums` inside the
 package, not from the entry's `trust`. A package without `plugin.sums` and

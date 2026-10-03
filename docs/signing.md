@@ -25,7 +25,7 @@ nginx-ui derives the trust level of a package from the key that signed its
 | --- | --- |
 | The official plugin key of the nginx-ui project, pinned in every build (`internal/releasesign`) | `official` |
 | A partner key, certified by the official plugin key in the package (`plugin.partner`) or listed in the signed partner keyring (`v1/partners.json`) | `verified` |
-| The `author_public_key` of the catalog entry | `community` |
+| The `author_public_key` of the catalog entry, or a signing key it certified in the package (`plugin.signer`) | `community` |
 | No signature, or a key none of the rows above match | unsigned |
 
 A key id listed under `revoked` in the partner keyring is never a partner
@@ -57,25 +57,42 @@ writes `plugin.sums` for every platform package and signs it when
 
 A partner copies its certificate, `plugin.partner` and
 `plugin.partner.minisig`, into the staged directory before writing
-`plugin.sums`, so both are listed like any other file.
+`plugin.sums`, so both are listed like any other file. A community author
+does the same with the certificate of its signing key, `plugin.signer` and
+`plugin.signer.minisig`.
 
 Sign after every other change to the staged files. Any later edit, even to
 a documentation file, makes `sha256sum -c` fail on the host.
 
 ## Community keys
 
-A community author generates a key pair on a machine they trust:
+A community author keeps two kinds of keys. The primary key goes into the
+entry's `author_public_key`, either whole or as its single key line, stays
+offline and practically never changes. It certifies signing keys, and a
+signing key signs the packages. `nginx-ui plugin key init --id <id>` creates
+both and the certificate:
 
-```sh
-minisign -G -p plugin.pub -s plugin.key
-```
+- `plugin.signer` is the signing public key, as `minisign -G` writes it.
+- `plugin.signer.minisig` is the primary key's signature over it, with the
+  trusted comment `signer:<plugin id>`.
 
-`plugin.pub` goes into the entry's `author_public_key`, either whole or as
-its single key line. `scripts/build-catalog.mjs` verifies every package
-of a community entry against that key before it lists the release. When an author replaces the
-key, packages signed with the old one no longer match the entry and count
-as unsigned, so the author signs new releases with the new key and updates
-`author_public_key` in the same pull request that lists the first of them.
+`scripts/build-catalog.mjs` lists a release of a community entry only when
+every package carries that certificate, `plugin.sums` lists it, the primary
+key verifies it, it names the plugin, its key is not in the entry's
+`revoked_signers`, and the certified key signed `plugin.sums`. A package the
+primary key signed itself is not listed. The catalog records the key that
+signed each release as its `signer`.
+
+Replacing a signing key changes nothing here: the author certifies a new one
+with `nginx-ui plugin key rotate` and signs the next release with it, older
+releases keep the certificates they carry. When a signing key may have
+leaked, its key id goes into `revoked_signers` through a pull request, which
+is reviewed like a yank. Every release that key signed is then marked
+yanked, and hosts treat the packages it signed as unsigned.
+
+Replacing the primary key in `author_public_key` leaves every release signed
+under the old one without a trusted signature, so it is the last resort for a
+lost or leaked primary key, and those releases should be yanked.
 
 ## The official plugin key and partner keys
 
@@ -237,6 +254,9 @@ accepting that listing. A certificate without an expiry stays valid on such
 a host for good, which is why certificates should carry a long one.
 
 ## Rotation procedure
+
+This section is about the official plugin key and partner keys. A community
+author replaces a signing key as [Community keys](#community-keys) describes.
 
 Rotate a signing key if it may have been exposed, on a routine schedule the
 maintainers set, or when moving signing to new infrastructure.

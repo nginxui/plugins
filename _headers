@@ -2,7 +2,8 @@
 # a short cache keeps revocations moving; schemas change with releases only.
 # The pages show text from plugin authors, so they run no inline script and
 # load nothing but their own files, https images and the Cloudflare Web
-# Analytics beacon that Pages injects.
+# Analytics beacon that Pages injects. The icons come from plugin packages, an
+# SVG opened on its own runs nothing either.
 /*
   Content-Security-Policy: default-src 'none'; script-src 'self' https://static.cloudflareinsights.com; connect-src 'self' https://cloudflareinsights.com; style-src 'self'; img-src 'self' https:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
   Referrer-Policy: strict-origin-when-cross-origin
@@ -10,6 +11,8 @@
 /v1/*
   Cache-Control: public, max-age=300
   X-Content-Type-Options: nosniff
+/v1/icons/*
+  Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox
 /v1/*.minisig
   Content-Type: text/plain; charset=utf-8
 /assets/*

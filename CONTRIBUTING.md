@@ -20,10 +20,13 @@ Before you submit, your plugin should have:
   (`io.github.<owner>.<name>` if you have no domain of your own). `id` must
   never start with `com.nginxui.`, which is reserved for plugins the
   nginx-ui project maintains itself.
-- A minisign key pair (`minisign -G`), required for `community` trust. Every
-  package carries `plugin.sums` and its signature `plugin.sums.minisig` at
-  its root, see `docs/signing.md`. A package without them is unsigned and
-  installs only on a host in developer mode.
+- A primary key and a signing key it certified, made once with
+  `nginx-ui plugin key init --id <your plugin id>`. Every package carries
+  `plugin.sums`, its signature `plugin.sums.minisig` by the signing key and
+  the certificate `plugin.signer` and `plugin.signer.minisig` at its root;
+  `nginx-ui plugin pack --key signing.key` writes all of them, see
+  `docs/signing.md`. A package without a signature is unsigned and installs
+  only on a host in developer mode.
 
 ## Submission path 1: the Issue form
 
@@ -52,15 +55,11 @@ lists no releases: they are read from your GitHub Releases (see below).
 Required fields and what they mean are documented in
 `schema/entry.schema.json`; in particular:
 
-- `name` and `description` are locale maps; `en` is required, additional
-  locales are welcome. They can come straight from your `plugin.json`: its
-  top level `name` and `description` are the `en` text, and its optional
-  `i18n` block (see [Manifest](https://nginxui.com/plugin/manifest), e.g.
-  `"i18n": { "zh_CN": { "name": "...", "description": "..." } }`) holds the
-  other locales. The Issue form path fills both maps for the entry it
-  drafts, leaving out empty translations, and the manifest snapshot of each
-  release in the catalog keeps the `i18n` block. Later releases never
-  rewrite the maps, so copy changed translations into your entry by hand.
+- `name` is a locale map with the reviewed English name, `{ "en": "..." }`.
+  Everything else the listing shows comes from the `plugin.json` of your
+  newest stable release, see [What your releases change](#what-your-releases-change):
+  leave `description`, `homepage_url`, `readme_url`, `icon_url` and
+  `screenshots` out unless you need to override it.
 - `trust` for a submission is always `"community"`. `verified` is reserved
   for partner organizations, see [Partner plugins](#partner-plugins).
 - `repository_url` is the GitHub repository whose Releases publish the
@@ -69,19 +68,19 @@ Required fields and what they mean are documented in
   platform with a `.sha256` file next to each, see
   [Packaging](https://nginxui.com/plugin/packaging). The signature lives
   inside each package.
-- `author_public_key` is required for a `community` entry. It is the minisign
-  public key that signs `plugin.sums` in your packages.
+- `author_public_key` is required for a `community` entry. It is your
+  primary public key, `primary.pub` from `nginx-ui plugin key init`, which
+  certifies the signing keys of your packages.
+- `revoked_signers` lists the ids of signing keys you withdrew, see
+  [Withdrawing a signing key](#withdrawing-a-signing-key).
 - `categories` is optional: one to three ids from the `category` list of
   `schema/entry.schema.json`, such as `certificates` or `logs`. The
   marketplace and the catalog site translate them and filter by them.
-- `screenshots` is optional: up to eight images of the plugin in use, each an
-  `https` `url` of a PNG, JPEG or WebP file and an optional `caption` locale
-  map. About 16:10 at 1280 to 1920 pixels wide shows well. Add `dark_url`, the
-  same view in the dark theme at the same size, and NGINX UI shows it while
-  its interface is dark; without one the `url` image shows in both themes. NGINX UI shows only
-  images served from your repository's GitHub host, the catalog or the host of
-  your packages, so keep them in your repository and link the raw file of a
-  release tag.
+- `screenshots` overrides the screenshots of your `plugin.json`: up to eight
+  images, each an `https` `url` of a PNG, JPEG or WebP file with an optional
+  `dark_url` and `caption` locale map. NGINX UI shows only images served
+  from your repository's GitHub host, the catalog or the host of your
+  packages.
 
 ## What `.github/workflows/validate.yml` checks
 
@@ -100,10 +99,12 @@ entry:
    `plugin.sums` and `plugin.sums.minisig` must sit at the package root,
    every regular file besides them must be listed in `plugin.sums` with a
    matching digest, and `plugin.sums.minisig` must verify against the key of
-   the entry's trust level: your `author_public_key` for a `community` entry,
-   the partner certificate or `partners/` for a `verified` one (see
-   [Partner plugins](#partner-plugins)), the official plugin key for an
-   `official` one.
+   the entry's trust level: for a `community` entry a signing key that the
+   signer certificate in the package names, that your `author_public_key`
+   certified for this plugin and that `revoked_signers` does not list; the
+   partner certificate or `partners/` for a `verified` one (see
+   [Partner plugins](#partner-plugins)); the official plugin key for an
+   `official` one. The job summary lists what the entry will show.
 3. **Lint and conformance**: runs `nginx-ui plugin lint` and
    `nginx-ui plugin conformance` against the package a linux-amd64 host would
    install (`downloads["linux-amd64"]`, `downloads["any"]`, or the portable
@@ -128,6 +129,34 @@ Nothing to do: the deploy reads your GitHub Releases every hour and lists a
 new one as soon as its packages verify. Prereleases are listed too, on the
 channel their version names, see the channel rules in the README. A draft
 release is ignored until it is published.
+
+### What your releases change
+
+The listing follows the release it is shown with, the newest stable release
+that is not yanked, or the newest release while there is no stable one:
+
+| Listing | From that release |
+| --- | --- |
+| Name translations | `i18n.<language>.name` of `plugin.json`. The English name stays the one in your entry, change it with a pull request. |
+| Description | `description` and `i18n.<language>.description` of `plugin.json` |
+| Homepage | `homepage_url` of `plugin.json` |
+| README | `README.md` at the tag of the release |
+| Icon | the file `icon_path` of `plugin.json` names in the package, PNG, WebP or SVG of at most 256 KB, which the catalog serves |
+| Screenshots | `screenshots` of `plugin.json`, read from your repository at the tag, see [Manifest](https://nginxui.com/plugin/manifest#screenshots) |
+
+A field your entry sets wins: per language for the name and the description,
+as a whole for the others. Maintainers use this to correct a listing. The
+deploy lists every entry whose listing changed in its job summary, and the
+maintainers look over the changes after the fact.
+
+### Withdrawing a signing key
+
+To replace a signing key, run `nginx-ui plugin key rotate` and sign your next
+release with the new one, nothing changes here. When a signing key may have
+leaked, open a pull request that adds its id to `revoked_signers` of your
+entry; `nginx-ui plugin key revoke signing.pub` prints the line. Every
+release that key signed is then yanked and hosts treat its packages as
+unsigned, so publish a new release signed with a new key.
 
 To have a release listed within minutes of publishing it instead, install the
 [NGINX UI Plugin Catalog](https://github.com/apps/nginx-ui-plugin-catalog)
