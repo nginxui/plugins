@@ -26,6 +26,10 @@ on:
         description: Build without a published catalog, refused once the site serves one
         type: boolean
         default: false
+      repin:
+        description: Listed releases rebuilt on purpose, as <id>@<version> separated by spaces, to verify and pin anew
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -81,12 +85,16 @@ jobs:
           CATALOG_URL: ${{ vars.CATALOG_URL }}
           PLUGIN_SIGNING_PUBLIC_KEY: ${{ vars.PLUGIN_SIGNING_PUBLIC_KEY }}
           FIRST_DEPLOY: ${{ inputs.first_deploy }}
+          REPIN: ${{ inputs.repin }}
         run: |
+          args=(--out dist --failures .cache/verify-failures.json)
           if [ "${FIRST_DEPLOY}" = "true" ]; then
-            node scripts/build-catalog.mjs --out dist --failures .cache/verify-failures.json --first-deploy
-          else
-            node scripts/build-catalog.mjs --out dist --failures .cache/verify-failures.json
+            args+=(--first-deploy)
           fi
+          for release in ${REPIN}; do
+            args+=(--repin "${release}")
+          done
+          node scripts/build-catalog.mjs "${args[@]}"
 
       - id: failures-key
         if: always()

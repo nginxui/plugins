@@ -26,6 +26,11 @@
 //                      deploy, and fails when the site already serves one: a
 //                      deploy that skipped the published catalog would no
 //                      longer pin its packages.
+//   --repin <id>@<version>
+//                      reads that listed release again as if it were new:
+//                      its packages are verified and pinned anew. Only for a
+//                      release rebuilt on purpose, the build fails when the
+//                      published catalog does not list it.
 //   --only <file>      build these entries only, for checking a pull request
 //   --verify-newest    also check the newest release of every built entry
 //                      when the published catalog already lists it
@@ -162,9 +167,15 @@ function releaseFingerprint(entry, ghRelease, version) {
  * { releases, provides, failures }: failures are reasons the build must stop
  * for, a new release that cannot be read or does not verify is only left out.
  */
-async function entryReleases(entry, published, { token, verifyNewest, failed, visited }) {
+async function entryReleases(entry, published, { token, verifyNewest, failed, visited, repin }) {
   const failures = []
   const pinned = new Map((published?.releases ?? []).map(release => [release.version, release]))
+  for (const version of pinned.keys()) {
+    if (repin.delete(`${entry.id}@${version}`)) {
+      console.warn(`::warning title=${entry.id}::${version} is read again, its packages are pinned anew`)
+      pinned.delete(version)
+    }
+  }
   const repo = parseGithubRepoUrl(entry.repository_url)
   if (!repo) {
     failures.push(`${entry.id}: repository_url ${JSON.stringify(entry.repository_url)} is not a github.com repository`)
@@ -350,8 +361,10 @@ async function main() {
       'verify-newest': { type: 'boolean', default: false },
       'failures': { type: 'string' },
       'first-deploy': { type: 'boolean', default: false },
+      'repin': { type: 'string', multiple: true, default: [] },
     },
   })
+  const repin = new Set(values.repin)
   if (values['first-deploy']) {
     if (await servesCatalog(values.published))
       throw new Error(`${values.published} already serves a catalog; --first-deploy only builds the first one`)
@@ -373,11 +386,14 @@ async function main() {
   const plugins = []
   const failures = []
   for (const entry of loadEntries(values.only)) {
-    const result = await entryReleases(entry, publishedById.get(entry.id), { token, verifyNewest: values['verify-newest'], failed, visited })
+    const result = await entryReleases(entry, publishedById.get(entry.id), { token, verifyNewest: values['verify-newest'], failed, visited, repin })
     failures.push(...result.failures)
     plugins.push(catalogEntry(entry, result.releases, result.provides))
     console.log(`${entry.id}: ${result.releases.map(release => release.version).join(', ') || 'no release'}`)
   }
+
+  for (const release of repin)
+    failures.push(`--repin ${release}: the published catalog lists no such release`)
 
   // Key order is fixed, so the same sources and releases build the same bytes.
   const index = { schema_version: SCHEMA_VERSION, name: CATALOG_NAME, icon: CATALOG_ICON }
