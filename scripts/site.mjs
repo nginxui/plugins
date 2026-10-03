@@ -363,7 +363,7 @@ ${section(t.permissions, renderPermissions(d, t, locale))}
 ${section(t.information, `<dl class="info">${info.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${value}</dd></div>`).join('')}</dl>`)}`
 }
 
-function renderShell({ locale, title, description, pathOf, main }) {
+function renderShell({ locale, title, description, pathOf, main, assets }) {
   const t = STRINGS[locale]
   const alternates = LOCALES.map(other => `<link rel="alternate" hreflang="${LANG[other]}" href="${SITE}${pathOf(other)}">`).join('\n')
   const languages = LOCALES.map(other => `<li><a href="${pathOf(other)}" hreflang="${LANG[other]}" lang="${LANG[other]}" data-locale="${other}"${other === locale ? ' aria-current="page"' : ''}>${LANGUAGE_NAME[other]}</a></li>`).join('')
@@ -378,8 +378,8 @@ function renderShell({ locale, title, description, pathOf, main }) {
 ${alternates}
 <link rel="alternate" hreflang="x-default" href="${SITE}${pathOf('en')}">
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/assets/site.css">
-<script src="/assets/site.js"></script>
+<link rel="stylesheet" href="${escapeHtml(assets.css)}">
+<script src="${escapeHtml(assets.js)}"></script>
 </head>
 <body>
 <header class="site-head">
@@ -417,7 +417,7 @@ ${main}
 `
 }
 
-function renderList(index, locale) {
+function renderList(index, locale, assets) {
   const t = STRINGS[locale]
   const plugins = [...index.plugins].sort((a, b) => localized(a.name, locale).localeCompare(localized(b.name, locale), LANG[locale]))
   const updated = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(index.updated_at ?? '') ? index.updated_at : ''
@@ -432,6 +432,7 @@ function renderList(index, locale) {
     title: t.title,
     description: t.lead,
     pathOf: listPath,
+    assets,
     main: `<main>
   <h1 class="visually-hidden">${escapeHtml(t.title)}</h1>
   <p class="lead">${escapeHtml(t.lead)}</p>
@@ -446,13 +447,14 @@ ${dialogs}`,
   })
 }
 
-function renderPluginPage(plugin, index, locale) {
+function renderPluginPage(plugin, index, locale, assets) {
   const t = STRINGS[locale]
   return renderShell({
     locale,
     title: `${localized(plugin.name, locale)} | ${t.title}`,
     description: localized(plugin.description, locale),
     pathOf: other => pluginPath(other, plugin.id),
+    assets,
     main: `<main class="detail-page">
   <p class="back"><a href="${listPath(locale)}">${escapeHtml(t.allPlugins)}</a></p>
   <article class="detail">
@@ -463,14 +465,18 @@ ${renderDetail(plugin, locale, index, 'h1')}
 }
 
 /** The pages of the site as [path, html]: per language the list and a page
- * per plugin. */
-export function renderSite(index) {
+ * per plugin. versions maps an asset file name to a version of its content,
+ * which its URL carries: the assets are cached for a day, so a changed file
+ * needs a new URL. */
+export function renderSite(index, { versions = {} } = {}) {
+  const asset = name => `/assets/${name}${versions[name] ? `?v=${encodeURIComponent(versions[name])}` : ''}`
+  const assets = { css: asset('site.css'), js: asset('site.js') }
   const pages = []
   for (const locale of LOCALES) {
     const base = locale === 'en' ? '' : `${locale}/`
-    pages.push([`${base}index.html`, renderList(index, locale)])
+    pages.push([`${base}index.html`, renderList(index, locale, assets)])
     for (const plugin of index.plugins)
-      pages.push([`${base}plugins/${plugin.id}/index.html`, renderPluginPage(plugin, index, locale)])
+      pages.push([`${base}plugins/${plugin.id}/index.html`, renderPluginPage(plugin, index, locale, assets)])
   }
   return pages
 }

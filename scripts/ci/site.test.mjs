@@ -58,4 +58,13 @@ test('every language has a list and a page per plugin', () => {
   // An empty translation falls back to the English reason.
   assert.match(pages.get('ja_JP/plugins/com.example.demo/index.html'), /<p class="reason"><span>作者による説明<\/span>To call &#60;the&#62; API\.<\/p>/)
   assert.match(pages.get('index.html'), /href="\/plugins\/com\.example\.demo\/" data-plugin="com\.example\.demo"/)
+  assert.match(pages.get('index.html'), /<link rel="stylesheet" href="\/assets\/site\.css">/)
+})
+
+test('asset URLs carry the version of their content', () => {
+  const pages = new Map(renderSite({ plugins: [] }, { versions: { 'site.css': 'abc123', 'site.js': 'def456' } }))
+  for (const html of pages.values()) {
+    assert.match(html, /<link rel="stylesheet" href="\/assets\/site\.css\?v=abc123">/)
+    assert.match(html, /<script src="\/assets\/site\.js\?v=def456"><\/script>/)
+  }
 })

@@ -437,7 +437,9 @@ async function main() {
   for (const name of SPEC_SCHEMAS)
     cpSync(specSchema(name), path.join(out, 'schema', name))
   writeFileSync(path.join(out, '404.html'), NOT_FOUND)
-  for (const [file, html] of renderSite(index)) {
+  const versions = Object.fromEntries(['site.css', 'site.js'].map(name =>
+    [name, createHash('sha256').update(readFileSync(path.join(ROOT, 'assets', name))).digest('hex').slice(0, 12)]))
+  for (const [file, html] of renderSite(index, { versions })) {
     mkdirSync(path.dirname(path.join(out, file)), { recursive: true })
     writeFileSync(path.join(out, file), html)
   }
