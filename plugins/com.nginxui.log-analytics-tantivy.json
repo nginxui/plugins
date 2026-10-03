@@ -16,6 +16,48 @@
   "repository_url": "https://github.com/nginxui/plugin-log-analytics-tantivy",
   "readme_url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics-tantivy/main/README.md",
   "icon_url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics-webapp/main/public/icon.svg",
+  "screenshots": [
+    {
+      "url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics-tantivy/main/docs/screenshots/1-dashboard.png",
+      "dark_url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics-tantivy/main/docs/screenshots/1-dashboard-dark.png",
+      "caption": {
+        "en": "Visits, visitors, traffic and their trends at a glance",
+        "zh_CN": "一览访问量、访客、流量及其趋势",
+        "zh_TW": "一覽訪問量、訪客、流量及其趨勢",
+        "ja_JP": "アクセス数、訪問者、転送量とその推移をひと目で確認"
+      }
+    },
+    {
+      "url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics-tantivy/main/docs/screenshots/2-regions.png",
+      "dark_url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics-tantivy/main/docs/screenshots/2-regions-dark.png",
+      "caption": {
+        "en": "Open a country to see its regions",
+        "zh_CN": "点开国家查看各地区的访问",
+        "zh_TW": "點開國家檢視各地區的訪問",
+        "ja_JP": "国を開いて地域ごとのアクセスを確認"
+      }
+    },
+    {
+      "url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics-tantivy/main/docs/screenshots/3-search.png",
+      "dark_url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics-tantivy/main/docs/screenshots/3-search-dark.png",
+      "caption": {
+        "en": "Search with field queries such as status:5xx",
+        "zh_CN": "用 status:5xx 这样的字段查询来搜索",
+        "zh_TW": "以 status:5xx 這類欄位查詢來搜尋",
+        "ja_JP": "status:5xx のようなフィールド指定で検索"
+      }
+    },
+    {
+      "url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics-tantivy/main/docs/screenshots/4-errors.png",
+      "dark_url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics-tantivy/main/docs/screenshots/4-errors-dark.png",
+      "caption": {
+        "en": "Search the error log by level and text",
+        "zh_CN": "按级别和内容搜索错误日志",
+        "zh_TW": "依層級和內容搜尋錯誤日誌",
+        "ja_JP": "レベルと内容でエラーログを検索"
+      }
+    }
+  ],
   "categories": [
     "logs",
     "analytics"
