@@ -84,3 +84,11 @@ test('a list without categories offers no filter', () => {
   const pages = new Map(renderSite({ plugins: [{ id: 'com.example.a', name: { en: 'a' }, description: { en: 'a' }, releases: [] }] }))
   assert.doesNotMatch(pages.get('index.html'), /category-filter/)
 })
+
+test('a plugin with only previews shows a beta badge on its card', () => {
+  const plugin = (id, version) => ({ id, name: { en: id }, description: { en: id }, author: 'someone', trust: 'community', releases: [{ version, platforms: ['any'], manifest: {} }] })
+  const list = new Map(renderSite({ plugins: [plugin('com.example.beta', '0.1.0-beta.1'), plugin('com.example.stable', '1.0.0')] })).get('index.html')
+  const card = id => list.slice(list.indexOf(`data-plugin="${id}"`), list.indexOf('</article>', list.indexOf(`data-plugin="${id}"`)))
+  assert.match(card('com.example.beta'), /<div class="card-badges"><span class="badge trust-community">Community<\/span><span class="badge pill-beta">Beta<\/span><\/div>/)
+  assert.doesNotMatch(card('com.example.stable'), /pill-beta/)
+})

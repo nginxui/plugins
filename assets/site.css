@@ -186,11 +186,9 @@ code { padding: 1px 6px; border-radius: 6px; background: var(--chip); font: 13px
 .category-filter button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .category-filter button[aria-pressed="true"] { border-color: var(--accent); background: var(--official-bg); font-weight: 600; }
 
-.plugins { columns: 3 320px; column-gap: 20px; }
+.plugins { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 20px; margin-bottom: 20px; }
 
 .plugin {
-  break-inside: avoid;
-  margin-bottom: 20px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -220,11 +218,12 @@ code { padding: 1px 6px; border-radius: 6px; background: var(--chip); font: 13px
   font-weight: 600;
   white-space: nowrap;
 }
+.card-badges { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .trust-official { color: var(--official); background: var(--official-bg); }
 .trust-verified { color: var(--verified); background: var(--verified-bg); }
 .trust-community { color: var(--community); background: var(--community-bg); }
 
-.plugin-description { margin: 0; }
+.plugin-description { flex: 1; margin: 0; }
 
 .card-stats { display: flex; margin: 0; }
 .card-stats div { flex: 0 1 auto; min-width: 0; padding: 0 16px; }

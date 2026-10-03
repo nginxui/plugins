@@ -200,6 +200,11 @@ function trustBadge(plugin, t) {
   return `<span class="badge trust-${trust}">${escapeHtml(t.trust[trust])}</span>`
 }
 
+/** The beta badge of a plugin that has only previews, no stable release. */
+function betaBadge(d, t) {
+  return !d.stable && d.preview ? `<span class="badge pill-beta">${escapeHtml(t.beta)}</span>` : ''
+}
+
 function iconTag(plugin, size) {
   const icon = safeUrl(plugin.icon_url)
   return icon
@@ -247,7 +252,7 @@ function renderCard(plugin, locale) {
       <h2><a class="plugin-link" href="${escapeHtml(pluginPath(locale, plugin.id))}" data-plugin="${escapeHtml(plugin.id)}">${escapeHtml(d.name)}</a></h2>
       <p class="plugin-author">${escapeHtml(t.by(plugin.author ?? ''))}</p>
     </div>
-    ${trustBadge(plugin, t)}
+    <div class="card-badges">${trustBadge(plugin, t)}${betaBadge(d, t)}</div>
   </header>
   <p class="plugin-description">${escapeHtml(d.description)}</p>
   <dl class="card-stats">${facts.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${value}</dd></div>`).join('')}</dl>
@@ -366,7 +371,7 @@ function renderDetail(plugin, locale, index, headingTag) {
   <div class="detail-title">
     <${headingTag}>${escapeHtml(d.name)}</${headingTag}>
     <p class="plugin-author">${escapeHtml(t.by(plugin.author ?? ''))}</p>
-    <div class="detail-badges">${trustBadge(plugin, t)}${!d.stable && d.preview ? `<span class="badge pill-beta">${escapeHtml(t.beta)}</span>` : ''}</div>
+    <div class="detail-badges">${trustBadge(plugin, t)}${betaBadge(d, t)}</div>
   </div>
 </header>
 <dl class="stats">${stats.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${value}</dd></div>`).join('')}</dl>
