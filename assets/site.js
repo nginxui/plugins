@@ -2,9 +2,9 @@
 // browser until a language is chosen in the menu, then it keeps that one. The
 // theme follows the system until the button picks one. A card opens the details
 // of its plugin over the list, with the address of the plugin page. The pages
-// work without it: no search field, no theme button, no redirect, and a card
-// leads to the plugin page. A screenshot opens larger over the page, or as the
-// image itself without it.
+// work without it: no search field or category filter, no theme button, no
+// redirect, and a card leads to the plugin page. A screenshot opens larger
+// over the page, or as the image itself without it.
 (() => {
   const LOCALES = ['en', 'zh_CN', 'zh_TW', 'ja_JP']
   const THEMES = ['light', 'dark']
@@ -116,26 +116,45 @@
     })
   }
 
-  // Filters the plugin cards by the words typed into the search field.
+  // Filters the plugin cards by the words typed into the search field and the
+  // category picked above them.
   function setUpSearch() {
     const search = document.querySelector('.search')
+    const filter = document.querySelector('.category-filter')
+    const buttons = filter ? [...filter.querySelectorAll('button')] : []
     const cards = [...document.querySelectorAll('.plugin')]
     const empty = document.querySelector('.empty')
+    let category = ''
+
+    function apply() {
+      const words = search.value.toLowerCase().split(/\s+/).filter(Boolean)
+      let shown = 0
+      for (const card of cards) {
+        const match = words.every(word => card.dataset.search.includes(word))
+          && (!category || card.dataset.categories.split(' ').includes(category))
+        if (match && card.hidden && !calm.matches)
+          card.animate([{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], { duration: 200, easing: 'ease-out' })
+        card.hidden = !match
+        if (match)
+          shown++
+      }
+      empty.hidden = shown > 0
+    }
+
     if (search) {
       search.hidden = false
-      search.addEventListener('input', () => {
-        const words = search.value.toLowerCase().split(/\s+/).filter(Boolean)
-        let shown = 0
-        for (const card of cards) {
-          const match = words.every(word => card.dataset.search.includes(word))
-          if (match && card.hidden && !calm.matches)
-            card.animate([{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], { duration: 200, easing: 'ease-out' })
-          card.hidden = !match
-          if (match)
-            shown++
-        }
-        empty.hidden = shown > 0
-      })
+      search.addEventListener('input', apply)
+    }
+    if (filter && search) {
+      filter.hidden = false
+      for (const button of buttons) {
+        button.addEventListener('click', () => {
+          category = button.dataset.category
+          for (const other of buttons)
+            other.setAttribute('aria-pressed', String(other === button))
+          apply()
+        })
+      }
     }
 
     // The provider list of a DNS plugin filters by name as well.

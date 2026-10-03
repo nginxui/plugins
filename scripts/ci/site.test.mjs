@@ -68,3 +68,19 @@ test('asset URLs carry the version of their content', () => {
     assert.match(html, /<script src="\/assets\/site\.js\?v=def456"><\/script>/)
   }
 })
+
+test('categories filter the list and show in the details', () => {
+  const plugin = (id, categories) => ({ id, name: { en: id }, description: { en: id }, author: 'someone', trust: 'community', categories, releases: [{ version: '1.0.0', platforms: ['any'], manifest: {} }] })
+  const pages = new Map(renderSite({ plugins: [plugin('com.example.b', ['logs', 'custom']), plugin('com.example.a', ['certificates'])] }))
+  const list = pages.get('zh_CN/index.html')
+  // Known categories in the schema order, an unknown one after them by its id.
+  const offered = [...list.matchAll(/data-category="([^"]*)" aria-pressed="[a-z]+">([^<]*)</g)].map(m => `${m[1]}=${m[2]}`)
+  assert.deepEqual(offered, ['=全部', 'certificates=证书', 'logs=日志', 'custom=custom'])
+  assert.match(list, /data-search="[^"]*日志[^"]*" data-categories="logs custom"/)
+  assert.match(pages.get('plugins/com.example.b/index.html'), /<dt>Categories<\/dt><dd><ul class="chips"><li>Logs<\/li><li>custom<\/li><\/ul><\/dd>/)
+})
+
+test('a list without categories offers no filter', () => {
+  const pages = new Map(renderSite({ plugins: [{ id: 'com.example.a', name: { en: 'a' }, description: { en: 'a' }, releases: [] }] }))
+  assert.doesNotMatch(pages.get('index.html'), /category-filter/)
+})

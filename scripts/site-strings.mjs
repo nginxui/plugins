@@ -33,6 +33,8 @@ export const STRINGS = {
     language: 'Language',
     darkMode: 'Dark mode',
     allPlugins: 'All plugins',
+    categories: 'Categories',
+    allCategories: 'All',
     close: 'Close',
     previous: 'Previous',
     next: 'Next',
@@ -80,6 +82,8 @@ export const STRINGS = {
     language: '语言',
     darkMode: '深色模式',
     allPlugins: '全部插件',
+    categories: '分类',
+    allCategories: '全部',
     close: '关闭',
     previous: '上一张',
     next: '下一张',
@@ -127,6 +131,8 @@ export const STRINGS = {
     language: '語言',
     darkMode: '深色模式',
     allPlugins: '全部外掛',
+    categories: '分類',
+    allCategories: '全部',
     close: '關閉',
     previous: '上一張',
     next: '下一張',
@@ -174,6 +180,8 @@ export const STRINGS = {
     language: '言語',
     darkMode: 'ダークモード',
     allPlugins: 'すべてのプラグイン',
+    categories: 'カテゴリ',
+    allCategories: 'すべて',
     close: '閉じる',
     previous: '前へ',
     next: '次へ',
@@ -194,6 +202,25 @@ export const STRINGS = {
     author: '著者',
     license: 'ライセンス',
   },
+}
+
+// The categories of schema/entry.schema.json, in the order the filter offers
+// them. A category the site does not know shows its id.
+export const CATEGORIES = {
+  certificates: { en: 'Certificates', zh_CN: '证书', zh_TW: '憑證', ja_JP: '証明書' },
+  dns: { en: 'DNS', zh_CN: 'DNS', zh_TW: 'DNS', ja_JP: 'DNS' },
+  security: { en: 'Security', zh_CN: '安全', zh_TW: '安全性', ja_JP: 'セキュリティ' },
+  traffic: { en: 'Traffic and upstreams', zh_CN: '流量与上游', zh_TW: '流量與上游', ja_JP: 'トラフィックとアップストリーム' },
+  monitoring: { en: 'Monitoring', zh_CN: '监控', zh_TW: '監控', ja_JP: '監視' },
+  logs: { en: 'Logs', zh_CN: '日志', zh_TW: '日誌', ja_JP: 'ログ' },
+  analytics: { en: 'Analytics', zh_CN: '分析', zh_TW: '分析', ja_JP: '分析' },
+  notifications: { en: 'Notifications', zh_CN: '通知', zh_TW: '通知', ja_JP: '通知' },
+  backup: { en: 'Backup and storage', zh_CN: '备份与存储', zh_TW: '備份與儲存', ja_JP: 'バックアップとストレージ' },
+  ai: { en: 'AI', zh_CN: 'AI', zh_TW: 'AI', ja_JP: 'AI' },
+  templates: { en: 'Config templates', zh_CN: '配置模板', zh_TW: '設定範本', ja_JP: '設定テンプレート' },
+  languages: { en: 'Language packs', zh_CN: '语言包', zh_TW: '語言套件', ja_JP: '言語パック' },
+  integrations: { en: 'Integrations', zh_CN: '集成', zh_TW: '整合', ja_JP: '連携' },
+  tools: { en: 'Tools', zh_CN: '工具', zh_TW: '工具', ja_JP: 'ツール' },
 }
 
 export const CAPABILITIES = {

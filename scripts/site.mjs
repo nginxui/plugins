@@ -9,6 +9,7 @@ import { compareSemver } from './ci/semver.mjs'
 import { inferChannel } from './ci/releases.mjs'
 import {
   CAPABILITIES,
+  CATEGORIES,
   CREDENTIALS_PERMISSION,
   LANG,
   LANGUAGE_NAME,
@@ -168,6 +169,18 @@ export function renderNotes(markdown) {
   return blocks.join('')
 }
 
+function categoryLabel(id, locale) {
+  return CATEGORIES[id]?.[locale] ?? id
+}
+
+/** The categories the plugins use, known ones in the order of CATEGORIES and
+ * any other after them by id. */
+function usedCategories(plugins) {
+  const used = new Set(plugins.flatMap(plugin => plugin.categories ?? []))
+  const known = Object.keys(CATEGORIES).filter(id => used.has(id))
+  return [...known, ...[...used].filter(id => !(id in CATEGORIES)).sort()]
+}
+
 function capability(name, locale) {
   const preset = CAPABILITIES[name] ?? OTHER_CAPABILITY
   return { label: preset.label[locale], description: preset.description[locale] }
@@ -208,6 +221,7 @@ function describe(plugin, locale) {
     manifest,
     platforms: platformNames(shown),
     memory: manifest.server?.resources?.recommended_memory_mb ?? 0,
+    categories: (plugin.categories ?? []).map(id => ({ id, label: categoryLabel(id, locale) })),
     capabilities: (plugin.capabilities ?? []).map(name => ({ name, ...capability(name, locale) })),
     providers: [...(plugin.provides?.dns01?.providers ?? [])].sort((a, b) => a.name.localeCompare(b.name, 'en')),
   }
@@ -216,7 +230,7 @@ function describe(plugin, locale) {
 function renderCard(plugin, locale) {
   const t = STRINGS[locale]
   const d = describe(plugin, locale)
-  const search = [plugin.id, d.name, d.description, plugin.author, ...d.capabilities.map(c => c.label), ...d.providers.map(p => p.name)].join(' ').toLowerCase()
+  const search = [plugin.id, d.name, d.description, plugin.author, ...d.categories.map(c => c.label), ...d.capabilities.map(c => c.label), ...d.providers.map(p => p.name)].join(' ').toLowerCase()
 
   const facts = []
   if (d.stable)
@@ -226,7 +240,7 @@ function renderCard(plugin, locale) {
   if (d.memory > 0)
     facts.push([t.memoryShort, escapeHtml(formatMemory(d.memory))])
 
-  return `<article class="plugin" data-search="${escapeHtml(search)}">
+  return `<article class="plugin" data-search="${escapeHtml(search)}" data-categories="${escapeHtml(d.categories.map(c => c.id).join(' '))}">
   <header class="plugin-head">
     ${iconTag(plugin, 48)}
     <div class="plugin-title">
@@ -337,6 +351,8 @@ function renderDetail(plugin, locale, index, headingTag) {
     info.push([t.author, escapeHtml(plugin.author)])
   if (plugin.license)
     info.push([t.license, escapeHtml(plugin.license)])
+  if (d.categories.length > 0)
+    info.push([t.categories, `<ul class="chips">${d.categories.map(c => `<li>${escapeHtml(c.label)}</li>`).join('')}</ul>`])
   if (homepage)
     info.push([t.homepage, `<a href="${escapeHtml(homepage)}" rel="noopener">${escapeHtml(homepage)}</a>`])
   if (repository)
@@ -421,6 +437,7 @@ function renderList(index, locale, assets) {
   const t = STRINGS[locale]
   const plugins = [...index.plugins].sort((a, b) => localized(a.name, locale).localeCompare(localized(b.name, locale), LANG[locale]))
   const updated = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(index.updated_at ?? '') ? index.updated_at : ''
+  const categories = usedCategories(plugins)
   const dialogs = plugins.map(plugin => `<dialog class="detail-dialog" id="detail-${escapeHtml(plugin.id)}" aria-label="${escapeHtml(localized(plugin.name, locale))}">
   <button class="close" type="button" aria-label="${escapeHtml(t.close)}" title="${escapeHtml(t.close)}">${CROSS}</button>
   <div class="detail-sheet">
@@ -437,6 +454,10 @@ function renderList(index, locale, assets) {
   <h1 class="visually-hidden">${escapeHtml(t.title)}</h1>
   <p class="lead">${escapeHtml(t.lead)}</p>
   <input class="search" type="search" placeholder="${escapeHtml(t.search)}" aria-label="${escapeHtml(t.search)}" hidden>
+  ${categories.length > 0 ? `<div class="category-filter" role="group" aria-label="${escapeHtml(t.categories)}" hidden>
+    <button type="button" data-category="" aria-pressed="true">${escapeHtml(t.allCategories)}</button>
+    ${categories.map(id => `<button type="button" data-category="${escapeHtml(id)}" aria-pressed="false">${escapeHtml(categoryLabel(id, locale))}</button>`).join('\n    ')}
+  </div>` : ''}
   <div class="plugins">
 ${plugins.map(plugin => renderCard(plugin, locale)).join('\n')}
   </div>

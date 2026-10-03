@@ -170,6 +170,22 @@ code { padding: 1px 6px; border-radius: 6px; background: var(--chip); font: 13px
 }
 .search:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+.category-filter { display: flex; flex-wrap: wrap; gap: 8px; margin: -8px 0 24px; }
+.category-filter[hidden] { display: none; }
+.category-filter button {
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.category-filter button:hover { border-color: var(--accent); }
+.category-filter button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.category-filter button[aria-pressed="true"] { border-color: var(--accent); background: var(--official-bg); font-weight: 600; }
+
 .plugins { columns: 3 320px; column-gap: 20px; }
 
 .plugin {
