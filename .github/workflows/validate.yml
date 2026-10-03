@@ -84,9 +84,7 @@ jobs:
       - name: Build the changed entries
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          # Until the site is deployed and the variable set, every release of
-          # an entry is verified.
-          PUBLISHED: ${{ vars.CATALOG_URL || 'none' }}
+          PUBLISHED: ${{ vars.CATALOG_URL || 'https://plugins.nginxui.com' }}
           PLUGIN_SIGNING_PUBLIC_KEY: ${{ vars.PLUGIN_SIGNING_PUBLIC_KEY }}
           CHANGED: ${{ needs.schema.outputs.changed_entries }}
         run: |
