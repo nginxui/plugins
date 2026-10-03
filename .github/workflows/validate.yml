@@ -1,11 +1,8 @@
 name: Validate
 
 # Runs on every pull request. The schema job checks the sources. The releases
-# job builds the catalog entries the pull request touches from their GitHub
-# Releases, verifying the packages of every release the published catalog
-# does not list yet and of the newest one, then lints the linux-amd64 package
-# of the newest release. See scripts/build-catalog.mjs and
-# scripts/ci/verify-release.mjs.
+# job checks the catalog entries the pull request touches with
+# check-entries.yml, which a submission uses as well.
 on:
   pull_request:
     paths:
@@ -43,8 +40,8 @@ jobs:
           repository: nginxui/plugin-spec
           path: .plugin-spec
 
-      - name: node --test scripts/ci/*.test.mjs
-        run: node --test scripts/ci/*.test.mjs
+      - name: node --test
+        run: node --test scripts/ci/*.test.mjs scripts/submission/*.test.mjs
 
       - name: node scripts/validate.mjs
         run: node scripts/validate.mjs
@@ -67,73 +64,6 @@ jobs:
     name: Releases, packages and lint
     needs: schema
     if: needs.schema.outputs.changed_entries != ''
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: "22"
-
-      # The catalog and keyring schemas live in the contract repository.
-      - uses: actions/checkout@v7
-        with:
-          repository: nginxui/plugin-spec
-          path: .plugin-spec
-
-      - name: Build the changed entries
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          # Until the site is deployed and the variable set, every release of
-          # an entry is verified.
-          PUBLISHED: ${{ vars.CATALOG_URL || 'none' }}
-          PLUGIN_SIGNING_PUBLIC_KEY: ${{ vars.PLUGIN_SIGNING_PUBLIC_KEY }}
-          CHANGED: ${{ needs.schema.outputs.changed_entries }}
-        run: |
-          set -euo pipefail
-          args=(--published "${PUBLISHED}")
-          while IFS= read -r file; do
-            [ -n "${file}" ] && args+=(--only "${file}")
-          done <<<"${CHANGED}"
-          node scripts/build-catalog.mjs --out "${RUNNER_TEMP}/site" --verify-newest "${args[@]}"
-
-      - name: nginx-ui plugin lint and conformance on the newest linux-amd64 package
-        env:
-          CHANGED: ${{ needs.schema.outputs.changed_entries }}
-        run: |
-          set -e
-          index="${RUNNER_TEMP}/site/v1/index.json"
-          # The plugin commands ship with the nginx-ui release that brings
-          # plugins; an older image has none to run.
-          if ! docker run --rm uozicoder/nginx-ui nginx-ui plugin --help >/dev/null 2>&1; then
-            echo "::notice title=Lint skipped::The uozicoder/nginx-ui image has no plugin command yet."
-            exit 0
-          fi
-          mkdir -p /tmp/pkg
-          while IFS= read -r file; do
-            [ -z "${file}" ] && continue
-            id=$(basename "${file}" .json)
-            # The package a linux-amd64 nginx-ui host would install.
-            if ! url=$(node scripts/ci/select-download.mjs "${index}" "${id}" linux-amd64); then
-              echo "SKIP ${id}: no linux-amd64 package in the newest release, nothing to lint"
-              continue
-            fi
-
-            echo "::group::${id}"
-            archive="/tmp/pkg/${id}.tar.gz"
-            curl -fsSL -o "${archive}" "${url}"
-
-            echo "running nginx-ui plugin lint"
-            docker run --rm -v "${archive}:/pkg/${id}.tar.gz:ro" uozicoder/nginx-ui \
-              nginx-ui plugin lint "/pkg/${id}.tar.gz"
-
-            echo "running nginx-ui plugin conformance"
-            docker run --rm -v "${archive}:/pkg/${id}.tar.gz:ro" uozicoder/nginx-ui \
-              nginx-ui plugin conformance "/pkg/${id}.tar.gz" || {
-                echo "conformance starts the plugin's own executable for this platform;"
-                echo "a plugin with no linux-amd64 executable, or one needing capabilities this runner"
-                echo "cannot provide, is expected to report failures here, read the case list above."
-                exit 1
-              }
-            echo "::endgroup::"
-          done <<<"${CHANGED}"
+    uses: ./.github/workflows/check-entries.yml
+    with:
+      entries: ${{ needs.schema.outputs.changed_entries }}

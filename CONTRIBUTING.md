@@ -32,18 +32,31 @@ Before you submit, your plugin should have:
 
 Open a new Issue and pick **Submit a plugin**
 (`.github/ISSUE_TEMPLATE/submit-plugin.yml`). Fill in your repository URL,
-the plugin id, and a contact (GitHub handle is fine), then apply the
-`submission` label if it was not applied automatically.
+your primary public key and, if you like, the categories. The issue is the
+whole submission, there is no pull request to follow:
 
-`.github/workflows/submit-issue.yml` then:
+1. `.github/workflows/submit-issue.yml` drafts `plugins/<id>.json` from your
+   newest release (`scripts/submission/`): the id and the English name come
+   from its `plugin.json`, the license from your repository, the categories
+   from your choice or the capabilities of the plugin.
+2. It checks the draft the way a pull request is checked, see
+   [What `.github/workflows/validate.yml` checks](#what-githubworkflowsvalidateyml-checks),
+   and posts a status comment with the result, what the listing will show
+   and the drafted entry. The status comment is updated in place, so it
+   always describes the last checked version of the issue.
+3. To change something, edit the issue. Your edits run the checks again,
+   so do a new release when the problem was in the packages.
+4. A maintainer reviews the issue, see [Review and merge](#review-and-merge),
+   and adds the `approved` label. The checks run once more and the entry is
+   committed to `main`, credited to you. The deploy then comments the plugin
+   page and closes the issue. An edit after the approval withdraws it.
+   Approving, listing and a withdrawn approval each add a short comment, so
+   the people concerned are notified.
 
-1. Parses the form fields from the issue body.
-2. Fetches your repository's latest release.
-3. Generates a draft `plugins/<id>.json` from the release and your
-   `plugin.json`.
-4. Opens a pull request adding that file, and links it back to your issue.
-
-From there, the pull request goes through the same checks as path 2.
+The repository has to agree to be listed. The submission checks that you own
+it, that you are a public member of the organization that owns it, or that it
+has the `nginx-ui-plugin` topic, which only its administrators can set.
+Otherwise a maintainer confirms it with the owners before approving.
 
 ## Submission path 2: a pull request
 
@@ -115,13 +128,26 @@ request is not mergeable until the newest release verifies.
 
 ## Review and merge
 
-A maintainer reviews the PR: the plugin's stated permissions and
-capabilities against what it plausibly needs, its README, and the CI
-results above. Once merged, `.github/workflows/deploy.yml` builds the
-catalog and deploys it, and your plugin is live at the default catalog URL
-within the cache time of nginx-ui hosts (`internal/plugin.Marketplace`
-caches a source for up to one hour, or refreshes at once for a user who hits
-"refresh").
+A maintainer reviews the submission once, with the checks and the listing
+preview in front of them:
+
+1. The repository agrees to be listed: the submission check passed, or the
+   owners confirmed it.
+2. The name does not pass the plugin off as another one or as the Nginx UI
+   project's.
+3. The permissions and capabilities fit what the plugin does, and
+   `permission_reasons` explain them.
+4. The README and the screenshots are about the plugin and follow the code
+   of conduct.
+5. The license and the categories fit.
+
+An issue is approved with the `approved` label, a pull request is merged.
+`.github/workflows/deploy.yml` then builds the catalog and deploys it, and
+your plugin is live at the default catalog URL within the cache time of
+nginx-ui hosts (`internal/plugin.Marketplace` caches a source for up to one
+hour, or refreshes at once for a user who hits "refresh"). Later releases
+are not reviewed one by one: the deploy lists them, and the maintainers look
+over the listing changes it reports.
 
 ## Keeping your listing up to date
 

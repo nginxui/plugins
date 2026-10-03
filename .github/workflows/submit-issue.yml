@@ -1,76 +1,255 @@
 name: Submit issue
 
-# Turns a "Submit a plugin" issue (.github/ISSUE_TEMPLATE/submit-plugin.yml,
-# labelled "submission") into a draft plugins/<id>.json and a pull request.
-# Well-known rejection reasons (bad id, no release yet, id already taken)
-# post an explanatory comment back on the issue instead of failing the
-# workflow — see scripts/ci/submit-issue.mjs's `fail()`.
+# Turns a "Submit a plugin" issue (.github/ISSUE_TEMPLATE/submit-plugin.yml)
+# into a catalog entry, with no pull request:
+#
+# - The form labels the issue "submission", and its author editing the issue
+#   runs the checks again: scripts/submission/issue.mjs drafts the entry,
+#   check-entries.yml checks it like a pull request, and one status comment
+#   shows the result and what the entry will list. It is updated in place,
+#   so it always describes the version of the issue the last checks saw.
+# - A maintainer labels the issue "approved". The checks run once more and
+#   the entry is committed to main as the NGINX UI Catalog Submissions App,
+#   whose commit starts the deploy. The deploy comments the plugin page and
+#   closes the issue.
+#
+# The approval holds only for the issue body the last checks saw: an edit
+# afterwards removes the label. Approving, listing and a withdrawn approval
+# each get a short comment of their own, since an edited comment notifies
+# nobody. The App is installed on nginxui/plugins only,
+# with Contents write. Variable SUBMIT_APP_CLIENT_ID and secret
+# SUBMIT_APP_PRIVATE_KEY hold its credentials.
 on:
   issues:
-    types: [labeled]
+    types: [labeled, edited]
 
-permissions:
-  contents: write
-  pull-requests: write
-  issues: write
+permissions: {}
+
+concurrency:
+  group: submit-${{ github.event.issue.number }}
+  cancel-in-progress: false
 
 jobs:
-  submit:
-    if: github.event.label.name == 'submission'
+  gate:
+    name: Decide what to run
+    if: github.event.issue.state == 'open'
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    outputs:
+      mode: ${{ steps.gate.outputs.mode }}
+      note: ${{ steps.gate.outputs.note }}
     steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: "20"
-
-      - id: draft
-        name: Draft plugins/<id>.json from the issue form
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node scripts/ci/submit-issue.mjs "${GITHUB_EVENT_PATH}"
-
-      - id: cpr
-        name: Open a pull request
-        if: steps.draft.outputs.result == 'ok'
-        uses: peter-evans/create-pull-request@v8
-        with:
-          commit-message: "feat(plugins): submit ${{ steps.draft.outputs.plugin_id }}"
-          branch: bot/submit-${{ github.event.issue.number }}
-          title: "Submit plugin: ${{ steps.draft.outputs.plugin_id }}"
-          body: |
-            Opened automatically from #${{ github.event.issue.number }} by
-            `.github/workflows/submit-issue.yml`.
-
-            ${{ steps.draft.outputs.message }}
-
-            Closes #${{ github.event.issue.number }}
-          labels: automated-pr, submission
-
-      - name: Comment on the issue
-        if: always()
+      - id: gate
         uses: actions/github-script@v9
         with:
           script: |
-            const result = "${{ steps.draft.outputs.result }}"
-            const message = ${{ toJSON(steps.draft.outputs.message) }}
-            const prNumber = "${{ steps.cpr.outputs.pull-request-number }}"
-
-            let body
-            if (result === 'ok' && prNumber) {
-              body = `Opened #${prNumber} from this submission.\n\n${message}`
+            const { createHash } = require('node:crypto')
+            const { action, label, issue, sender, changes } = context.payload
+            const labels = issue.labels.map(item => item.name)
+            const where = { ...context.repo, issue_number: issue.number }
+            const decide = (mode, note = '') => {
+              core.setOutput('mode', mode)
+              core.setOutput('note', note)
             }
-            else if (result === 'error') {
-              body = `This submission could not be processed automatically:\n\n${message}\n\nFix the issue above and re-apply the \`submission\` label to try again, or open a pull request by hand (see CONTRIBUTING.md).`
+            const removeLabel = name => github.rest.issues.removeLabel({ ...where, name }).catch(() => {})
+
+            if (action === 'labeled' && label.name === 'submission')
+              return decide('check')
+            if (action === 'edited') {
+              // Only the author's edits of the form run the checks again.
+              if (!labels.includes('submission') || sender.id !== issue.user.id || !changes?.body)
+                return decide('skip')
+              if (labels.includes('approved')) {
+                await removeLabel('approved')
+                // Tell the maintainer who approved it, an edit notifies nobody.
+                const events = await github.paginate(github.rest.issues.listEvents, { ...where, per_page: 100 })
+                const approver = events.findLast(item => item.event === 'labeled' && item.label?.name === 'approved')?.actor?.login
+                return decide('check', `${approver ? `@${approver} ` : ''}The submission changed after it was approved, so the approval was removed. Approve it again once the new checks pass.`)
+              }
+              return decide('check')
+            }
+            if (action !== 'labeled' || label.name !== 'approved' || !labels.includes('submission'))
+              return decide('skip')
+
+            const { data: access } = await github.rest.repos.getCollaboratorPermissionLevel({ ...context.repo, username: sender.login })
+            if (!['admin', 'maintain', 'write'].includes(access.permission)) {
+              await removeLabel('approved')
+              return decide('skip')
+            }
+            const comments = await github.paginate(github.rest.issues.listComments, { ...where, per_page: 100 })
+            const report = comments.findLast(comment => comment.user?.type === 'Bot' && comment.body?.includes('<!-- submission '))
+            const marker = report?.body.match(/<!-- submission body=([0-9a-f]{64}) status=(\w+) -->/)
+            const body = createHash('sha256').update(issue.body ?? '').digest('hex')
+            if (!marker || marker[1] !== body) {
+              await removeLabel('approved')
+              return decide('event', `@${sender.login} The approval was removed: the submission changed since its last checks. Approve it again once the checks of the current version are done.`)
+            }
+            if (marker[2] === 'failed') {
+              await removeLabel('approved')
+              return decide('event', `@${sender.login} The approval was removed: the last checks of this submission failed, see the status comment above.`)
+            }
+            return decide('write')
+
+  draft:
+    name: Draft the entry
+    needs: gate
+    if: needs.gate.outputs.mode == 'check' || needs.gate.outputs.mode == 'write'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      result: ${{ steps.draft.outputs.result }}
+      message: ${{ steps.draft.outputs.message }}
+      id: ${{ steps.draft.outputs.id }}
+      path: ${{ steps.draft.outputs.path }}
+      entry: ${{ steps.draft.outputs.entry }}
+      drafts: ${{ steps.draft.outputs.drafts }}
+      eligible: ${{ steps.draft.outputs.eligible }}
+      eligibility: ${{ steps.draft.outputs.eligibility }}
+      body_sha256: ${{ steps.draft.outputs.body_sha256 }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - id: draft
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/submission/issue.mjs "${GITHUB_EVENT_PATH}"
+
+  verify:
+    name: Check the entry
+    needs: draft
+    if: needs.draft.outputs.result == 'ok'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/check-entries.yml
+    with:
+      entries: ${{ needs.draft.outputs.path }}
+      drafts: ${{ needs.draft.outputs.drafts }}
+
+  report:
+    name: Report and list
+    needs: [gate, draft, verify]
+    if: always() && needs.gate.result == 'success' && needs.gate.outputs.mode != 'skip'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      # Minted only to list an approved submission whose checks passed.
+      - id: app
+        if: needs.gate.outputs.mode == 'write' && needs.draft.outputs.result == 'ok' && needs.verify.result == 'success'
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.SUBMIT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.SUBMIT_APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - uses: actions/github-script@v9
+        env:
+          MODE: ${{ needs.gate.outputs.mode }}
+          NOTE: ${{ needs.gate.outputs.note }}
+          DRAFT: ${{ needs.draft.result }}
+          RESULT: ${{ needs.draft.outputs.result }}
+          MESSAGE: ${{ needs.draft.outputs.message }}
+          ID: ${{ needs.draft.outputs.id }}
+          ENTRY_PATH: ${{ needs.draft.outputs.path }}
+          ENTRY: ${{ needs.draft.outputs.entry }}
+          ELIGIBLE: ${{ needs.draft.outputs.eligible }}
+          ELIGIBILITY: ${{ needs.draft.outputs.eligibility }}
+          BODY_SHA256: ${{ needs.draft.outputs.body_sha256 }}
+          VERIFY: ${{ needs.verify.result }}
+          PREVIEW: ${{ needs.verify.outputs.preview }}
+          PROBLEMS: ${{ needs.verify.outputs.problems }}
+          APP_TOKEN: ${{ steps.app.outputs.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            const env = process.env
+            const issue = context.payload.issue
+            const where = { ...context.repo, issue_number: issue.number }
+            // Text from the submission neither renders HTML nor mentions anyone.
+            const plain = text => (text ?? '').replace(/</g, '&lt;').replace(/@/g, '@\u200B')
+            const comments = await github.paginate(github.rest.issues.listComments, { ...where, per_page: 100 })
+            const previous = comments.findLast(comment => comment.user?.type === 'Bot' && comment.body?.includes('<!-- submission '))
+            // The status comment is updated in place, an event gets a comment
+            // of its own, which notifies the people it concerns.
+            const saveStatus = async body => previous
+              ? github.rest.issues.updateComment({ ...context.repo, comment_id: previous.id, body })
+              : github.rest.issues.createComment({ ...where, body })
+            const postEvent = body => github.rest.issues.createComment({ ...where, body })
+
+            if (env.MODE === 'event')
+              return postEvent(env.NOTE)
+
+            const passed = env.RESULT === 'ok' && env.VERIFY === 'success'
+            const status = !passed ? 'failed' : env.ELIGIBLE === 'true' ? 'passed' : 'ineligible'
+            const lines = []
+            if (env.DRAFT !== 'success') {
+              lines.push('### Submission could not be processed', '', `Something went wrong while reading this submission ([log](${env.RUN_URL})). A maintainer will follow up.`)
+            }
+            else if (env.RESULT !== 'ok') {
+              lines.push('### Submission needs a change', '', plain(env.MESSAGE), '', 'Edit this issue to fix it, the checks run again on their own.')
             }
             else {
-              body = 'Something went wrong processing this submission automatically. A maintainer will follow up — feel free to open a pull request by hand in the meantime (see CONTRIBUTING.md).'
+              lines.push(passed ? '### Checks passed' : '### Checks failed', '', plain(env.MESSAGE), '')
+              if (!passed)
+                lines.push(env.PROBLEMS || `See the [log](${env.RUN_URL}).`, '', 'Publish a fixed release or edit this issue, the checks run again on an edit.', '')
+              lines.push(env.ELIGIBLE === 'true'
+                ? `**Submitter**: ${env.ELIGIBILITY}.`
+                : `**Submitter**: ${env.ELIGIBILITY}. Submit from the account that owns the repository, make your membership of its organization public, or add the \`nginx-ui-plugin\` topic to the repository, then edit this issue. Otherwise a maintainer confirms that the repository agrees to be listed.`, '')
+              if (env.PREVIEW)
+                lines.push('### Listing preview', '', env.PREVIEW, '')
+              lines.push('<details><summary>Drafted entry</summary>', '', '```json', env.ENTRY.trim(), '```', '', '</details>', '')
+              if (passed && env.MODE === 'check')
+                lines.push('A maintainer reviews the submission and lists it by adding the `approved` label.')
             }
 
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body,
-            })
+            lines.push('', `<!-- submission body=${env.BODY_SHA256} status=${status} -->`)
+            await saveStatus(lines.join('\n'))
+            if (env.NOTE)
+              await postEvent(env.NOTE)
+
+            if (env.MODE === 'write') {
+              const approver = context.payload.sender.login
+              if (!env.APP_TOKEN) {
+                await github.rest.issues.removeLabel({ ...where, name: 'approved' }).catch(() => {})
+                await postEvent(`@${approver} The approval was removed: the checks did not pass when listing, see the status comment above.`)
+              }
+              else {
+                const app = getOctokit(env.APP_TOKEN)
+                const message = [
+                  `feat(plugins): list ${env.ID}`,
+                  '',
+                  `Submitted by @${issue.user.login} in #${issue.number}`,
+                  `Approved by @${approver}`,
+                  '',
+                  `Co-authored-by: ${issue.user.login} <${issue.user.id}+${issue.user.login}@users.noreply.github.com>`,
+                ].join('\n')
+                let listed
+                for (let attempt = 0; attempt < 3 && !listed; attempt++) {
+                  const { data: ref } = await app.rest.git.getRef({ ...context.repo, ref: 'heads/main' })
+                  const { data: parent } = await app.rest.git.getCommit({ ...context.repo, commit_sha: ref.object.sha })
+                  const { data: tree } = await app.rest.git.createTree({ ...context.repo, base_tree: parent.tree.sha,
+                    tree: [{ path: env.ENTRY_PATH, mode: '100644', type: 'blob', content: env.ENTRY }] })
+                  const { data: commit } = await app.rest.git.createCommit({ ...context.repo, message, tree: tree.sha, parents: [parent.sha] })
+                  try {
+                    await app.rest.git.updateRef({ ...context.repo, ref: 'heads/main', sha: commit.sha })
+                    listed = commit
+                  }
+                  catch (err) {
+                    // main moved on meanwhile, build on the new head.
+                    if (err.status !== 422)
+                      throw err
+                  }
+                }
+                if (!listed)
+                  throw new Error('main kept moving, the entry was not committed')
+                await postEvent(`@${issue.user.login} Approved by @${approver} and committed in ${listed.sha}. The plugin page appears once the deploy finishes, and this issue closes then.`)
+              }
+            }

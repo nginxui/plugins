@@ -1,72 +1,64 @@
 name: Submit a plugin
-description: Ask for a new plugin to be added to the nginx-ui catalog.
-title: "plugin: <your plugin id>"
+description: List a plugin in the Nginx UI plugin catalog.
+title: "plugin: <your plugin name>"
 labels: ["submission"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for submitting a plugin! Read `CONTRIBUTING.md` first — in
-        particular, your repository needs at least one GitHub Release before
-        this can be validated and merged.
+        Read [CONTRIBUTING.md](https://github.com/nginxui/plugins/blob/main/CONTRIBUTING.md) first.
 
-        Filing this form opens an automated pull request
-        (`.github/workflows/submit-issue.yml`) that adds a draft
-        `plugins/<id>.json` for you. You can also skip this form and open
-        that pull request yourself.
+        This issue is the whole submission. The checks run when you submit it
+        and post the result and a preview of the listing as a comment. To
+        change something, edit this issue and the checks run again. A
+        maintainer lists the plugin by approving the issue, and from then on
+        every release of your repository is listed on its own.
+
+        The repository has to agree to be listed: submit from the account
+        that owns it, be a public member of the organization that owns it, or
+        add the `nginx-ui-plugin` topic to it.
   - type: input
     id: repository_url
     attributes:
       label: Repository URL
-      description: The plugin's public GitHub repository.
+      description: The public GitHub repository whose releases publish the plugin. The plugin id and name come from the plugin.json of its newest release.
       placeholder: https://github.com/<owner>/<repo>
-    validations:
-      required: true
-  - type: input
-    id: plugin_id
-    attributes:
-      label: Plugin id
-      description: >
-        Reverse-DNS style, e.g. io.github.<owner>.<name>. Must not start with
-        com.nginxui. (reserved for official plugins). <owner> must match the
-        GitHub account that owns the repository above.
-      placeholder: io.github.example.mydns
-    validations:
-      required: true
-  - type: input
-    id: contact
-    attributes:
-      label: Contact
-      description: Your GitHub handle, or another way maintainers can reach you.
-      placeholder: "@your-github-handle"
-    validations:
-      required: true
-  - type: dropdown
-    id: trust_requested
-    attributes:
-      label: Trust level requested
-      description: >
-        New submissions are listed as "community" regardless of this answer.
-        "verified" is reserved for partner organizations, see
-        CONTRIBUTING.md#partner-plugins.
-      options:
-        - community
-      default: 0
     validations:
       required: true
   - type: textarea
     id: author_public_key
     attributes:
-      label: Minisign public key
+      label: Primary public key
       description: >
-        Required before your submission can be merged (the plugin.sums of
-        every package of a community entry is signed with this key, see
-        docs/signing.md). Paste the contents of your
-        plugin.pub, or the single-line public key minisign prints. You can
-        add this in a follow-up comment or commit if you do not have it yet.
+        The contents of primary.pub from `nginx-ui plugin key init`. It
+        certifies the signing keys of your packages, see
+        [Signing Keys](https://nginxui.com/plugin/signing#signing-keys).
       placeholder: |
         untrusted comment: minisign public key ...
         RW....................................
+    validations:
+      required: true
+  - type: dropdown
+    id: categories
+    attributes:
+      label: Categories
+      description: One to three. Without a choice they come from the capabilities of the plugin.
+      multiple: true
+      options:
+        - certificates
+        - dns
+        - security
+        - traffic
+        - monitoring
+        - logs
+        - analytics
+        - notifications
+        - backup
+        - ai
+        - templates
+        - languages
+        - integrations
+        - tools
     validations:
       required: false
   - type: checkboxes
@@ -74,7 +66,7 @@ body:
     attributes:
       label: Checklist
       options:
-        - label: My repository has at least one GitHub Release with a packaged .tar.gz asset.
+        - label: The newest release has the packages of the plugin, signed with a signing key the primary key above certified.
           required: true
         - label: My plugin.json passes `nginx-ui plugin lint` with no errors.
           required: true

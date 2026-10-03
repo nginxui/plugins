@@ -25,6 +25,8 @@ const PLUGINS_DIR = path.join(ROOT, 'plugins')
 const PARTNERS_DIR = path.join(ROOT, 'partners')
 const ENTRY_SCHEMA = path.join(ROOT, 'schema', 'entry.schema.json')
 const PARTNER_SCHEMA = path.join(ROOT, 'schema', 'partner.schema.json')
+const BLOCKED_FILE = path.join(ROOT, 'blocked.json')
+const BLOCKED_SCHEMA = path.join(ROOT, 'schema', 'blocked.schema.json')
 
 let errorCount = 0
 
@@ -141,6 +143,34 @@ function checkRepositories(entries) {
   ok('every entry is released on GitHub')
 }
 
+/** Checks blocked.json against its schema and that no entry is blocked. */
+function checkBlocked(entries) {
+  if (!existsSync(BLOCKED_FILE)) {
+    ok('no blocked.json, nothing is blocked')
+    return
+  }
+  let blocked
+  try {
+    blocked = JSON.parse(readFileSync(BLOCKED_FILE, 'utf8'))
+  }
+  catch (err) {
+    fail('blocked.json', err.message)
+    return
+  }
+  const errors = validateAgainstSchemaFile(BLOCKED_SCHEMA, blocked)
+  for (const error of errors)
+    fail('blocked.json', error)
+  if (errors.length > 0)
+    return
+  const repositories = new Set(blocked.repositories.map(name => name.toLowerCase()))
+  for (const [file, entry] of entries) {
+    const repo = parseGithubRepoUrl(entry.repository_url)
+    if (blocked.plugins.includes(entry.id) || (repo && repositories.has(`${repo.owner}/${repo.repo}`.toLowerCase())))
+      fail(`plugins/${file}`, 'the plugin or its repository is in blocked.json')
+  }
+  ok('blocked.json matches its schema and blocks no listed entry')
+}
+
 /** Schema-validates every partners/<name>.json and checks what the schema
  * cannot: the file name, a parsable key used by one partner only, and a
  * reason exactly when the partner is revoked. */
@@ -235,6 +265,7 @@ function main() {
   checkNamingPolicy(entries)
   checkAuthorKeys(entries)
   checkRepositories(entries)
+  checkBlocked(entries)
   validatePartners()
   checkKeyring()
 

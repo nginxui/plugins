@@ -200,13 +200,14 @@ be broken or unsafe). In short:
 
 1. Open an Issue with the *Submit a plugin* form, or send a pull request that
    adds `plugins/<id>.json`.
-2. `.github/workflows/validate.yml` builds your entry from your GitHub
+2. `.github/workflows/check-entries.yml` builds your entry from your GitHub
    Releases, checks the `sha256` of every package, the `plugin.sums` list
-   inside it and its `plugin.sums.minisig` signature against your
-   `author_public_key`, and runs `nginx-ui plugin lint` and
-   `nginx-ui plugin conformance` in a container.
-3. A maintainer reviews and merges. Your plugin is listed with `trust:
-   "community"`.
+   inside it and its signature by a signing key your `author_public_key`
+   certified, and runs `nginx-ui plugin lint` and
+   `nginx-ui plugin conformance` in a container. An issue shows the result
+   and a preview of the listing in a comment.
+3. A maintainer reviews it and approves the issue or merges the pull
+   request. Your plugin is listed with `trust: "community"`.
 4. Every later GitHub Release of your repository reaches the catalog on its
    own, you do not need to touch this repository again for routine releases.
 

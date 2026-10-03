@@ -1,0 +1,197 @@
+name: Check entries
+
+# Checks catalog entries the way the deploy lists them: the schema of the
+# sources, the GitHub Releases of each entry with every package of a release
+# the published catalog does not list yet and of the newest one verified, and
+# nginx-ui plugin lint and conformance on the newest linux-amd64 package. An
+# entry needs at least one release that verifies.
+#
+# Called by validate.yml for a pull request and by submit-issue.yml for a
+# submission, whose entry file is not in the repository: drafts maps such a
+# path to its content. The outputs carry a preview of each entry and the
+# problems found, for the caller to show.
+on:
+  workflow_call:
+    inputs:
+      entries:
+        description: Entry files to check, plugins/<id>.json, one per line
+        type: string
+        required: true
+      drafts:
+        description: A JSON object of entry files to write first, path to content
+        type: string
+        default: "{}"
+    outputs:
+      preview:
+        description: What each entry will show, in Markdown
+        value: ${{ jobs.check.outputs.preview }}
+      problems:
+        description: What failed, a Markdown list, empty when every check passed
+        value: ${{ jobs.check.outputs.problems }}
+
+permissions:
+  contents: read
+
+env:
+  PLUGIN_SPEC_DIR: ${{ github.workspace }}/.plugin-spec
+
+jobs:
+  check:
+    name: Releases, packages and lint
+    runs-on: ubuntu-latest
+    outputs:
+      preview: ${{ steps.preview.outputs.preview }}
+      problems: ${{ steps.problems.outputs.problems }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      # The catalog and keyring schemas live in the contract repository.
+      - uses: actions/checkout@v7
+        with:
+          repository: nginxui/plugin-spec
+          path: .plugin-spec
+          persist-credentials: false
+
+      - name: Write the drafted entries
+        env:
+          DRAFTS: ${{ inputs.drafts }}
+        run: |
+          node -e '
+            const { writeFileSync } = require("node:fs")
+            for (const [file, content] of Object.entries(JSON.parse(process.env.DRAFTS))) {
+              if (!/^plugins\/[a-z0-9][a-z0-9.-]*\.json$/.test(file))
+                throw new Error(`refusing to write ${file}`)
+              writeFileSync(file, content)
+              console.log(`wrote ${file}`)
+            }
+          '
+
+      - id: schema
+        name: node scripts/validate.mjs
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          node scripts/validate.mjs 2>&1 | tee "${RUNNER_TEMP}/schema.log"
+
+      - id: build
+        name: Build the entries
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PUBLISHED: ${{ vars.CATALOG_URL || 'https://plugins.nginxui.com' }}
+          PLUGIN_SIGNING_PUBLIC_KEY: ${{ vars.PLUGIN_SIGNING_PUBLIC_KEY }}
+          ENTRIES: ${{ inputs.entries }}
+        run: |
+          set -euo pipefail
+          args=(--published "${PUBLISHED}")
+          while IFS= read -r file; do
+            [ -n "${file}" ] && args+=(--only "${file}")
+          done <<<"${ENTRIES}"
+          node scripts/build-catalog.mjs --out "${RUNNER_TEMP}/site" --verify-newest "${args[@]}" 2>&1 | tee "${RUNNER_TEMP}/build.log"
+
+      - id: preview
+        name: Preview the entries
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        env:
+          ENTRIES: ${{ inputs.entries }}
+        run: |
+          set -euo pipefail
+          index="${RUNNER_TEMP}/site/v1/index.json"
+          status=0
+          {
+            echo "preview<<PREVIEW_EOF"
+            while IFS= read -r file; do
+              [ -z "${file}" ] && continue
+              id=$(basename "${file}" .json)
+              echo "#### ${id}"
+              echo
+              node scripts/submission/preview.mjs "${index}" "${id}" || status=1
+              echo
+            done <<<"${ENTRIES}"
+            echo "PREVIEW_EOF"
+          } >"${RUNNER_TEMP}/preview.out"
+          cat "${RUNNER_TEMP}/preview.out" >>"${GITHUB_OUTPUT}"
+          { echo "## Listing preview"; echo; sed '1d;$d' "${RUNNER_TEMP}/preview.out"; } >>"${GITHUB_STEP_SUMMARY}"
+          exit "${status}"
+
+      - id: lint
+        name: nginx-ui plugin lint and conformance on the newest linux-amd64 package
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        env:
+          ENTRIES: ${{ inputs.entries }}
+        run: |
+          set -eo pipefail
+          index="${RUNNER_TEMP}/site/v1/index.json"
+          # The plugin commands ship with the nginx-ui release that brings
+          # plugins; an older image has none to run.
+          if ! docker run --rm uozicoder/nginx-ui nginx-ui plugin --help >/dev/null 2>&1; then
+            echo "::notice title=Lint skipped::The uozicoder/nginx-ui image has no plugin command yet."
+            exit 0
+          fi
+          mkdir -p /tmp/pkg
+          while IFS= read -r file; do
+            [ -z "${file}" ] && continue
+            id=$(basename "${file}" .json)
+            # The package a linux-amd64 nginx-ui host would install.
+            if ! url=$(node scripts/ci/select-download.mjs "${index}" "${id}" linux-amd64); then
+              echo "SKIP ${id}: no linux-amd64 package in the newest release, nothing to lint"
+              continue
+            fi
+
+            echo "::group::${id}"
+            archive="/tmp/pkg/${id}.tar.gz"
+            curl -fsSL -o "${archive}" "${url}"
+
+            echo "running nginx-ui plugin lint"
+            docker run --rm -v "${archive}:/pkg/${id}.tar.gz:ro" uozicoder/nginx-ui \
+              nginx-ui plugin lint "/pkg/${id}.tar.gz" 2>&1 | tee -a "${RUNNER_TEMP}/lint.log"
+
+            echo "running nginx-ui plugin conformance"
+            docker run --rm -v "${archive}:/pkg/${id}.tar.gz:ro" uozicoder/nginx-ui \
+              nginx-ui plugin conformance "/pkg/${id}.tar.gz" 2>&1 | tee -a "${RUNNER_TEMP}/lint.log" || {
+                echo "conformance starts the plugin's own executable for this platform;"
+                echo "a plugin with no linux-amd64 executable, or one needing capabilities this runner"
+                echo "cannot provide, is expected to report failures here, read the case list above."
+                exit 1
+              }
+            echo "::endgroup::"
+          done <<<"${ENTRIES}"
+
+      - id: problems
+        name: Collect the problems
+        if: always()
+        env:
+          SCHEMA: ${{ steps.schema.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+          PREVIEW: ${{ steps.preview.outcome }}
+          LINT: ${{ steps.lint.outcome }}
+        run: |
+          set -uo pipefail
+          lines() {
+            # One Markdown item per failure line, in code so nothing renders.
+            grep -h -E "$1" "$2" 2>/dev/null | sed -E 's/^::(error|warning)[^:]*::/  /; s/`/'"'"'/g; s/^ */- `/; s/$/`/' | head -n 20
+          }
+          {
+            [ "${SCHEMA}" = failure ] && lines '^FAIL' "${RUNNER_TEMP}/schema.log"
+            [ "${BUILD}" = failure ] && lines '^(::error|FAIL)' "${RUNNER_TEMP}/build.log"
+            [ "${BUILD}" = success ] && lines '^(::warning.*(left out|verify)|FAIL)' "${RUNNER_TEMP}/build.log"
+            [ "${PREVIEW}" = failure ] && echo "- No release of the entry verifies, so there is nothing to list."
+            [ "${LINT}" = failure ] && echo "- \`nginx-ui plugin lint\` or \`conformance\` failed, see the log of the check run."
+          } >"${RUNNER_TEMP}/problems.md" || true
+          {
+            echo "problems<<PROBLEMS_EOF"
+            cat "${RUNNER_TEMP}/problems.md"
+            echo "PROBLEMS_EOF"
+          } >>"${GITHUB_OUTPUT}"
+
+      - name: Fail when a check failed
+        if: steps.schema.outcome == 'failure' || steps.build.outcome == 'failure' || steps.preview.outcome == 'failure' || steps.lint.outcome == 'failure'
+        run: exit 1

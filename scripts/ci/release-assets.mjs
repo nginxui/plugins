@@ -2,7 +2,7 @@
 // "<id>-<version>.tar.gz" and/or the per-platform
 // "<id>-<version>-<goos>-<goarch>.tar.gz" files — and turns
 // the per-platform ones into a catalog release's "downloads" map. Shared by
-// scripts/ci/release-record.mjs and scripts/ci/submit-issue.mjs so a release
+// scripts/ci/release-record.mjs and scripts/submission/core.mjs so a release
 // picked up automatically is shaped the same way whether it ships one
 // package or one per platform.
 //

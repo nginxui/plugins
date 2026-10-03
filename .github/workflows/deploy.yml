@@ -8,7 +8,8 @@ name: Deploy
 # Runs on a change of main, every hour, and by hand. The release webhook in
 # worker/ runs it by hand as soon as a listed plugin releases. A scheduled run
 # that builds the same catalog and keyring as the published ones deploys
-# nothing.
+# nothing. When the change lists a submitted plugin (submit-issue.yml), the
+# deploy comments the plugin page on the submission issue and closes it.
 #
 # Secrets: CLOUDFLARE_API_TOKEN (Pages edit) and CLOUDFLARE_ACCOUNT_ID of the
 # "cloudflare" environment, and the organization PLUGIN_SIGNING_KEY that
@@ -47,6 +48,9 @@ jobs:
     runs-on: ubuntu-latest
     # Holds CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID.
     environment: cloudflare
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v7
         with:
@@ -63,7 +67,7 @@ jobs:
           repository: nginxui/plugin-spec
           path: .plugin-spec
 
-      - run: node --test scripts/ci/*.test.mjs
+      - run: node --test scripts/ci/*.test.mjs scripts/submission/*.test.mjs
 
       - run: node scripts/validate.mjs
 
@@ -137,7 +141,8 @@ jobs:
             echo "v1/partners.json.minisig verifies against PLUGIN_SIGNING_PUBLIC_KEY"
           fi
 
-      - name: Deploy to Cloudflare Pages
+      - id: deploy
+        name: Deploy to Cloudflare Pages
         if: steps.build.outputs.changed == 'true' || github.event_name != 'schedule'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -150,6 +155,30 @@ jobs:
             exit 0
           fi
           npx --yes wrangler@4 pages deploy dist --project-name "${PAGES_PROJECT}" --branch main --commit-hash "${GITHUB_SHA}"
+
+      - name: Close the submission
+        if: github.event_name == 'push' && steps.deploy.outcome == 'success'
+        uses: actions/github-script@v9
+        env:
+          MESSAGE: ${{ github.event.head_commit.message }}
+          SITE: ${{ vars.CATALOG_URL || 'https://plugins.nginxui.com' }}
+        with:
+          script: |
+            const message = process.env.MESSAGE ?? ''
+            const id = message.match(/^feat\(plugins\): list ([a-z0-9.-]+)$/m)?.[1]
+            const issue = Number(message.match(/^Submitted by @\S+ in #(\d+)$/m)?.[1])
+            if (!id || !issue)
+              return
+            const index = require('node:fs').readFileSync('dist/v1/index.json', 'utf8')
+            const listed = JSON.parse(index).plugins.find(plugin => plugin.id === id)
+            const where = { ...context.repo, issue_number: issue }
+            if (!listed?.releases?.length) {
+              await github.rest.issues.createComment({ ...where, body: `The entry of \`${id}\` is in the catalog sources, but no release of it verified in this deploy, so it is not listed yet. A maintainer will follow up.` })
+              return
+            }
+            const page = `${process.env.SITE.replace(/\/+$/, '')}/plugins/${id}/`
+            await github.rest.issues.createComment({ ...where, body: `Listed: ${page}\n\nNew releases are listed on their own from now on, and the listing follows the newest stable release.` })
+            await github.rest.issues.update({ ...where, state: 'closed', state_reason: 'completed' })
 
       - uses: actions/upload-artifact@v7
         with:

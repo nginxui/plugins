@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugins.nginxui.com/schema/blocked.schema.json",
+  "title": "Blocked submissions",
+  "description": "blocked.json: plugin ids and repositories the submission workflow refuses, for an author who broke the code of conduct or the submission requirements. A listed plugin is removed by deleting its entry, this only keeps it from coming back.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["plugins", "repositories"],
+  "properties": {
+    "plugins": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z0-9]+(\\.[a-z0-9-]+)+$" },
+      "uniqueItems": true
+    },
+    "repositories": {
+      "type": "array",
+      "description": "GitHub repositories as <owner>/<repo>, compared without regard to case.",
+      "items": { "type": "string", "pattern": "^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$" },
+      "uniqueItems": true
+    }
+  }
+}
