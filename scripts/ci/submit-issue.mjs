@@ -120,7 +120,6 @@ async function main() {
     capabilities: manifest.capabilities ?? [],
     license: '',
     trust: 'community',
-    stage: 'beta',
   }
 
   writeFileSync(entryFile, `${JSON.stringify(entry, null, 2)}\n`)

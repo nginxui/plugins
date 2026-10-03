@@ -66,6 +66,5 @@
     "dns01"
   ],
   "license": "AGPL-3.0-only",
-  "trust": "official",
-  "stage": "production"
+  "trust": "official"
 }

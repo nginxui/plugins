@@ -11,8 +11,7 @@
     "description",
     "author",
     "repository_url",
-    "trust",
-    "stage"
+    "trust"
   ],
   "properties": {
     "id": {
@@ -80,9 +79,6 @@
     },
     "trust": {
       "$ref": "#/$defs/trust"
-    },
-    "stage": {
-      "$ref": "#/$defs/stage"
     },
     "yanked": {
       "type": "array",
@@ -152,14 +148,6 @@
         "community"
       ],
       "description": "Trust level the entry claims. official: published by the nginx-ui project. verified: published by a partner organization the maintainers vouch for, with a partner certificate in the package or a listing in the partner keyring (v1/partners.json), with no claim about source review. community: signed by the author with author_public_key. The host derives the effective level from the key that signed plugin.sums inside the package."
-    },
-    "stage": {
-      "type": "string",
-      "enum": [
-        "production",
-        "beta"
-      ],
-      "description": "Maturity label shown next to the plugin. It does not change the channel of any release."
     },
     "semver": {
       "type": "string",

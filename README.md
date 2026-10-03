@@ -164,9 +164,6 @@ any host, whatever certificate a package carries. Hosts pick up a new
 keyring on their next catalog refresh. See `docs/signing.md` for issuing a
 certificate, publishing the keyring and revoking a key.
 
-`stage` is independent of trust: `production` or `beta`, signaling how much
-real-world use a release has had, not who vetted it.
-
 Every release belongs to a release channel: `stable`, `beta` or `dev`, from
 the most to the least stable. Without a `channel` on the release, the version
 decides: no prerelease part (`1.0.0`) is stable, a prerelease that starts with

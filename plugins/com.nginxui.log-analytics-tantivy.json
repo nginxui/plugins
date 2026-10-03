@@ -66,6 +66,5 @@
     "http"
   ],
   "license": "AGPL-3.0-only",
-  "trust": "official",
-  "stage": "beta"
+  "trust": "official"
 }
