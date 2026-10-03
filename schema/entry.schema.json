@@ -55,10 +55,11 @@
     },
     "categories": {
       "type": "array",
+      "description": "Where the marketplace files the plugin, one to three ids. Hosts translate the ids.",
+      "minItems": 1,
+      "maxItems": 3,
       "items": {
-        "type": "string",
-        "minLength": 1,
-        "maxLength": 64
+        "$ref": "#/$defs/category"
       },
       "uniqueItems": true
     },
@@ -90,6 +91,25 @@
     }
   },
   "$defs": {
+    "category": {
+      "type": "string",
+      "enum": [
+        "certificates",
+        "dns",
+        "security",
+        "traffic",
+        "monitoring",
+        "logs",
+        "analytics",
+        "notifications",
+        "backup",
+        "ai",
+        "templates",
+        "languages",
+        "integrations",
+        "tools"
+      ]
+    },
     "pluginId": {
       "type": "string",
       "pattern": "^[a-z0-9]+(\\.[a-z0-9-]+)+$",

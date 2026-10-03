@@ -15,7 +15,7 @@ import { readFileSync, writeFileSync, existsSync, appendFileSync } from 'node:fs
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { parseGithubRepoUrl, getLatestRelease, fetchRawFile } from './github.mjs'
-import { localizedTextFromManifest } from './manifest-snapshot.mjs'
+import { categoriesFromManifest, localizedTextFromManifest } from './manifest-snapshot.mjs'
 import { findPlatformAssets, findPortableAsset } from './release-assets.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
@@ -106,6 +106,7 @@ async function main() {
 
   // A first submission is always community trust.
   const { name, description } = localizedTextFromManifest(manifest)
+  const categories = categoriesFromManifest(manifest)
   const entry = {
     id: pluginId,
     name,
@@ -116,7 +117,7 @@ async function main() {
     repository_url: repositoryUrl,
     readme_url: `https://raw.githubusercontent.com/${repo.owner}/${repo.repo}/${release.tag_name}/README.md`,
     ...(manifest.icon_path ? { icon_url: `https://raw.githubusercontent.com/${repo.owner}/${repo.repo}/${release.tag_name}/${manifest.icon_path}` } : {}),
-    categories: [],
+    ...(categories.length > 0 ? { categories } : {}),
     capabilities: manifest.capabilities ?? [],
     license: '',
     trust: 'community',
@@ -131,7 +132,9 @@ async function main() {
     '',
     'A few fields need a human to fill in before this can be merged:',
     '- `license` (left empty — the SPDX identifier of the plugin\'s own license)',
-    '- `categories` (left empty — pick from existing entries or propose new ones)',
+    categories.length > 0
+      ? `- \`categories\` (${categories.join(', ')} from the capabilities, adjust to fit, see schema/entry.schema.json)`
+      : '- `categories` (one to three from schema/entry.schema.json)',
     !authorPublicKey ? '- `author_public_key` (not provided in the form — required before this can be merged)' : null,
     !manifest.icon_path ? '- `icon_url` (the manifest declares no icon_path)' : null,
   ].filter(Boolean).join('\n'))

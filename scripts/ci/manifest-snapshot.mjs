@@ -71,3 +71,30 @@ export function localizedTextFromManifest(manifest) {
 
   return { name, description }
 }
+
+/** The categories of schema/entry.schema.json a capability files a plugin
+ * under, in the order the categories are offered. */
+const CATEGORIES_BY_CAPABILITY = {
+  'dns01': ['certificates', 'dns'],
+  'cert.deploy': ['certificates'],
+  'security.blocklist': ['security'],
+  'upstream.discovery': ['traffic'],
+  'probe': ['monitoring'],
+  'log.sink': ['logs'],
+  'notify': ['notifications'],
+  'storage': ['backup'],
+  'mcp': ['ai'],
+}
+
+/** The categories a draft entry starts with, read from the capabilities and
+ * content of plugin.json, at most three. Empty when nothing maps. */
+export function categoriesFromManifest(manifest) {
+  const categories = new Set()
+  for (const capability of manifest.capabilities ?? [])
+    CATEGORIES_BY_CAPABILITY[capability]?.forEach(category => categories.add(category))
+  if (manifest.content?.templates)
+    categories.add('templates')
+  if (manifest.content?.locales)
+    categories.add('languages')
+  return [...categories].slice(0, 3)
+}

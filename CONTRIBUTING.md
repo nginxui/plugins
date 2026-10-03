@@ -71,6 +71,9 @@ Required fields and what they mean are documented in
   inside each package.
 - `author_public_key` is required for a `community` entry. It is the minisign
   public key that signs `plugin.sums` in your packages.
+- `categories` is optional: one to three ids from the `category` list of
+  `schema/entry.schema.json`, such as `certificates` or `logs`. The
+  marketplace and the catalog site translate them and filter by them.
 - `screenshots` is optional: up to eight images of the plugin in use, each an
   `https` `url` of a PNG, JPEG or WebP file and an optional `caption` locale
   map. About 16:10 at 1280 to 1920 pixels wide shows well. Add `dark_url`, the
