@@ -5,13 +5,18 @@ name: Submit issue
 # Well-known rejection reasons (bad id, no release yet, id already taken)
 # post an explanatory comment back on the issue instead of failing the
 # workflow — see scripts/ci/submit-issue.mjs's `fail()`.
+#
+# The pull request is opened as the NGINX UI Catalog Submissions App, so that
+# it runs Validate like any other pull request; one opened with GITHUB_TOKEN
+# would start no workflow. The App is installed on nginxui/plugins only, with
+# Contents and Pull requests write. Variable SUBMIT_APP_CLIENT_ID and secret
+# SUBMIT_APP_PRIVATE_KEY hold its credentials.
 on:
   issues:
     types: [labeled]
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
   issues: write
 
 jobs:
@@ -23,7 +28,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "22"
 
       - id: draft
         name: Draft plugins/<id>.json from the issue form
@@ -31,11 +36,23 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/ci/submit-issue.mjs "${GITHUB_EVENT_PATH}"
 
+      # Minted after the draft, so the step that reads the issue never holds it.
+      - id: app
+        if: steps.draft.outputs.result == 'ok'
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.SUBMIT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.SUBMIT_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
       - id: cpr
         name: Open a pull request
         if: steps.draft.outputs.result == 'ok'
         uses: peter-evans/create-pull-request@v8
         with:
+          token: ${{ steps.app.outputs.token }}
+          sign-commits: true
           commit-message: "feat(plugins): submit ${{ steps.draft.outputs.plugin_id }}"
           branch: bot/submit-${{ github.event.issue.number }}
           title: "Submit plugin: ${{ steps.draft.outputs.plugin_id }}"
@@ -46,7 +63,7 @@ jobs:
             ${{ steps.draft.outputs.message }}
 
             Closes #${{ github.event.issue.number }}
-          labels: automated-pr, submission
+          labels: submission
 
       - name: Comment on the issue
         if: always()
