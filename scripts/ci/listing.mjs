@@ -21,7 +21,7 @@ import { inferChannel } from './releases.mjs'
 const SCREENSHOT_TYPES = ['image/png', 'image/jpeg', 'image/webp']
 const MAX_SCREENSHOT_BYTES = 2 * 1024 * 1024
 // Content types of the icons the catalog serves.
-export const ICON_CONTENT_TYPES = { png: 'image/png', webp: 'image/webp', svg: 'image/svg+xml' }
+export const ICON_CONTENT_TYPES = { svg: 'image/svg+xml', png: 'image/png', webp: 'image/webp' }
 
 /** The release a listing is derived from, undefined without one. */
 export function displayRelease(releases) {
@@ -98,8 +98,9 @@ function manifestScreenshots(manifest, repo, tag) {
  * built releases, published the published entry or undefined. tags maps a
  * version to its tag, icons maps a version verified in this build to the icon
  * of its package, site is where the catalog is served. Returns
- * { fields, icon, warnings }: icon is { path, bytes } to serve or
- * { path, from } to carry over from the published site.
+ * { fields, icon, warnings }: icon is { path, bytes } to serve, or
+ * { version, candidates } for the paths to carry over from the published site,
+ * which then also give icon_url when the entry sets none.
  */
 export async function deriveListing(entry, releases, published, { repo, tags, icons, site }) {
   const warnings = []
@@ -157,25 +158,27 @@ export async function deriveListing(entry, releases, published, { repo, tags, ic
       fields.screenshots = kept
   }
 
+  // The icon inside the package of the display release. The catalog serves it
+  // even while the entry sets icon_url, so dropping the override keeps it.
   let icon
-  if (entry.icon_url) {
-    fields.icon_url = entry.icon_url
-  }
-  else {
-    const fresh = shown && icons.get(shown.version)
+  if (shown) {
     const base = site.replace(/\/+$/, '')
+    const fresh = icons.get(shown.version)
     if (fresh) {
-      const file = iconPath(entry.id, shown.version, fresh.type)
-      icon = { path: file, bytes: fresh.bytes }
-      fields.icon_url = `${base}/${file}`
+      icon = { path: iconPath(entry.id, shown.version, fresh.type), bytes: fresh.bytes }
     }
-    else if (published?.icon_url?.startsWith(`${base}/v1/icons/${entry.id}/`)) {
-      // The display release was verified in an earlier build, its icon is
-      // carried over from the published site.
-      icon = { path: published.icon_url.slice(base.length + 1), from: published.icon_url }
-      fields.icon_url = published.icon_url
+    else {
+      // Read in an earlier build, the published site holds it: under the name
+      // the published listing gives, else under one of the icon types.
+      const files = Object.keys(ICON_CONTENT_TYPES).map(type => iconPath(entry.id, shown.version, type))
+      const named = files.find(file => published?.icon_url === `${base}/${file}`)
+      icon = { version: shown.version, candidates: named ? [named] : files }
     }
   }
+  if (entry.icon_url)
+    fields.icon_url = entry.icon_url
+  else if (icon?.bytes)
+    fields.icon_url = `${site.replace(/\/+$/, '')}/${icon.path}`
 
   return { fields, icon, warnings }
 }

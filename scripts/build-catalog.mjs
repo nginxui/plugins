@@ -449,16 +449,20 @@ async function main() {
     const listing = await deriveListing(entry, result.releases, published, { repo: result.repo, tags: result.tags, icons: result.icons, site: servedAt })
     for (const warning of listing.warnings)
       console.warn(`::warning title=${entry.id}::${warning}`)
-    if (listing.icon?.from) {
-      const bytes = site ? await fetchPublishedFile(site, listing.icon.path) : null
-      if (bytes) {
-        listing.icon.bytes = bytes
+    if (listing.icon?.candidates) {
+      const { version, candidates } = listing.icon
+      listing.icon = undefined
+      for (const file of site ? candidates : []) {
+        const bytes = await fetchPublishedFile(site, file)
+        if (bytes) {
+          listing.icon = { path: file, bytes }
+          break
+        }
       }
-      else {
-        console.warn(`::warning title=${entry.id}::cannot read ${listing.icon.from} from the published site, the listing has no icon`)
-        delete listing.fields.icon_url
-        listing.icon = undefined
-      }
+      if (listing.icon && !entry.icon_url)
+        listing.fields.icon_url = `${servedAt.replace(/\/+$/, '')}/${listing.icon.path}`
+      else if (!listing.icon && !entry.icon_url && published?.icon_url)
+        console.warn(`::warning title=${entry.id}::the published site holds no icon of ${version}, the listing has no icon until its package is read again, see --repin`)
     }
     if (listing.icon)
       iconFiles.set(listing.icon.path, listing.icon.bytes)

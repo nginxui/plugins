@@ -78,9 +78,18 @@ test('what the published listing checked is not fetched again', async () => {
   const { fields, icon } = await deriveListing(entry, releases, published, { repo, tags, icons: new Map(), site })
   assert.deepEqual(requested, [])
   assert.equal(fields.screenshots.length, 2)
-  // An icon read in an earlier build is carried over.
-  assert.deepEqual(icon, { path: 'v1/icons/io.github.example.demo/1.0.0.png', from: published.icon_url })
-  assert.equal(fields.icon_url, published.icon_url)
+  // The icon of an earlier display release is not carried over, the site is
+  // asked for the one of 1.1.0 under each icon type.
+  assert.deepEqual(icon, {
+    version: '1.1.0',
+    candidates: ['svg', 'png', 'webp'].map(type => `v1/icons/io.github.example.demo/1.1.0.${type}`),
+  })
+  assert.equal(fields.icon_url, undefined)
+
+  // The icon the published listing names for the display release is the only
+  // one asked for.
+  const named = await deriveListing(entry, releases, { ...published, icon_url: `${site}/v1/icons/io.github.example.demo/1.1.0.png` }, { repo, tags, icons: new Map(), site })
+  assert.deepEqual(named.icon, { version: '1.1.0', candidates: ['v1/icons/io.github.example.demo/1.1.0.png'] })
 })
 
 test('an entry field replaces what the release gives', async () => {
@@ -90,7 +99,13 @@ test('an entry field replaces what the release gives', async () => {
   assert.equal(fields.readme_url, 'https://example.com/readme.md')
   assert.equal(fields.icon_url, 'https://example.com/icon.png')
   assert.deepEqual(fields.screenshots, [])
-  assert.equal(icon, undefined)
+  // The package icon is still served, so dropping the override keeps it.
+  assert.equal(icon.path, 'v1/icons/io.github.example.demo/1.1.0.png')
+
+  // Without a fresh read the published site is asked, also under an override.
+  const carried = await deriveListing(overridden, releases, { icon_url: 'https://example.com/icon.png' }, { repo, tags, icons: new Map(), site })
+  assert.equal(carried.fields.icon_url, 'https://example.com/icon.png')
+  assert.equal(carried.icon.candidates.length, 3)
 })
 
 test('a listing change names the fields that differ', () => {
