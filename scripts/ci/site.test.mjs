@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { formatMemory, offeredReleases, renderNotes, renderSite } from '../site.mjs'
+import { LOCALES } from '../site-strings.mjs'
 
 test('release notes keep headings, lists and links, and escape the rest', () => {
   const html = renderNotes('### Features\n\n- Add `x` and **y**\n- See [docs](https://example.com/a?b=1&c=2)\n\nA <b>raw</b> line')
@@ -38,16 +39,11 @@ test('every language has a list and a page per plugin', () => {
     releases: [{ version: '1.0.0', released_at: '2026-10-01T00:00:00Z', platforms: ['any'], manifest: { permissions: ['network'], network_hosts: ['api.example.com'], permission_reasons: { network: 'To call <the> API.' }, i18n: { zh_CN: { permission_reasons: { network: '调用 API。' } }, ja_JP: { permission_reasons: { network: ' ' } } }, server: { resources: { recommended_memory_mb: 128 } } } }],
   }
   const pages = new Map(renderSite({ updated_at: '2026-10-02T00:00:00Z', plugins: [plugin] }))
-  assert.deepEqual([...pages.keys()].sort(), [
-    'index.html',
-    'ja_JP/index.html',
-    'ja_JP/plugins/com.example.demo/index.html',
-    'plugins/com.example.demo/index.html',
-    'zh_CN/index.html',
-    'zh_CN/plugins/com.example.demo/index.html',
-    'zh_TW/index.html',
-    'zh_TW/plugins/com.example.demo/index.html',
-  ])
+  const prefix = locale => locale === 'en' ? '' : `${locale}/`
+  assert.deepEqual([...pages.keys()].sort(), LOCALES.flatMap(locale => [`${prefix(locale)}index.html`, `${prefix(locale)}plugins/com.example.demo/index.html`]).sort())
+  // Arabic reads right to left, the others left to right.
+  assert.match(pages.get('ar/index.html'), /<html lang="ar" dir="rtl"/)
+  assert.match(pages.get('de_DE/index.html'), /<html lang="de" data-locale/)
   const page = pages.get('plugins/com.example.demo/index.html')
   assert.match(page, /<h1>Demo &#60;x&#62;<\/h1>/)
   assert.match(page, /<code>api\.example\.com<\/code>/)

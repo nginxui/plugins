@@ -16,6 +16,7 @@ import {
   LOCALES,
   OTHER_CAPABILITY,
   PERMISSIONS,
+  RTL,
   STRINGS,
   UNKNOWN_PERMISSION,
 } from './site-strings.mjs'
@@ -389,7 +390,7 @@ function renderShell({ locale, title, description, pathOf, main, assets }) {
   const alternates = LOCALES.map(other => `<link rel="alternate" hreflang="${LANG[other]}" href="${SITE}${pathOf(other)}">`).join('\n')
   const languages = LOCALES.map(other => `<li><a href="${pathOf(other)}" hreflang="${LANG[other]}" lang="${LANG[other]}" data-locale="${other}"${other === locale ? ' aria-current="page"' : ''}>${LANGUAGE_NAME[other]}</a></li>`).join('')
   return `<!doctype html>
-<html lang="${LANG[locale]}" data-locale="${locale}">
+<html lang="${LANG[locale]}"${RTL.includes(locale) ? ' dir="rtl"' : ''} data-locale="${locale}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">

@@ -130,7 +130,7 @@ code { padding: 1px 6px; border-radius: 6px; background: var(--chip); font: 13px
 .languages ul {
   position: absolute;
   top: calc(100% + 6px);
-  right: 0;
+  inset-inline-end: 0;
   z-index: 10;
   min-width: 160px;
   margin: 0;
@@ -227,8 +227,8 @@ code { padding: 1px 6px; border-radius: 6px; background: var(--chip); font: 13px
 
 .card-stats { display: flex; margin: 0; }
 .card-stats div { flex: 0 1 auto; min-width: 0; padding: 0 16px; }
-.card-stats div:first-child { padding-left: 0; }
-.card-stats div + div { border-left: 1px solid var(--border); }
+.card-stats div:first-child { padding-inline-start: 0; }
+.card-stats div + div { border-inline-start: 1px solid var(--border); }
 .card-stats dt { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card-stats dd { margin: 0; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
@@ -286,7 +286,7 @@ html:has(.detail-dialog[open], .lightbox[open]) { overflow: hidden; }
 .close {
   position: absolute;
   top: 16px;
-  right: 18px;
+  inset-inline-end: 18px;
   z-index: 1;
   display: grid;
   place-items: center;
@@ -315,7 +315,7 @@ html:has(.detail-dialog[open], .lightbox[open]) { overflow: hidden; }
   .detail-page .detail { padding: 20px 16px; }
 }
 
-.detail-head { display: flex; align-items: center; gap: 16px; padding-right: 44px; }
+.detail-head { display: flex; align-items: center; gap: 16px; padding-inline-end: 44px; }
 .detail-head .plugin-icon { width: 72px; height: 72px; border-radius: 16px; }
 .detail-title { min-width: 0; }
 .detail-title h1, .detail-title h2 { margin: 0; font-size: 24px; line-height: 1.3; overflow-wrap: anywhere; }
@@ -330,12 +330,12 @@ html:has(.detail-dialog[open], .lightbox[open]) { overflow: hidden; }
   border-bottom: 1px solid var(--border);
 }
 .stats div { flex: 1 1 auto; padding: 4px 16px; text-align: center; }
-.stats div + div { border-left: 1px solid var(--border); }
+.stats div + div { border-inline-start: 1px solid var(--border); }
 .stats dt { color: var(--muted); font-size: 12px; }
 .stats dd { margin: 2px 0 0; font-size: 14px; font-weight: 600; }
 @media (max-width: 640px) {
   .stats div { flex-basis: 40%; }
-  .stats div + div { border-left: 0; }
+  .stats div + div { border-inline-start: 0; }
 }
 
 .notice { margin: 16px 0 0; padding: 10px 14px; border-radius: 10px; background: var(--official-bg); font-size: 14px; }
@@ -382,7 +382,7 @@ details[open] > summary.version-head::before { transform: rotate(90deg); }
 .notes { padding: 0 0 12px 20px; font-size: 14px; }
 .notes h4 { margin: 10px 0 4px; font-size: 14px; }
 .notes h4:first-child { margin-top: 0; }
-.notes ul { margin: 0; padding-left: 20px; }
+.notes ul { margin: 0; padding-inline-start: 20px; }
 .notes p { margin: 6px 0; }
 
 .rows { margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 12px; list-style: none; }
@@ -391,12 +391,12 @@ details[open] > summary.version-head::before { transform: rotate(90deg); }
 .rows p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
 .rows p.reason {
   margin-top: 8px;
-  padding-left: 10px;
-  border-left: 2px solid var(--border);
+  padding-inline-start: 10px;
+  border-inline-start: 2px solid var(--border);
   color: var(--text);
   font-size: 13px;
 }
-.reason span { margin-right: 6px; color: var(--muted); }
+.reason span { margin-inline-end: 6px; color: var(--muted); }
 .hosts-label { font-size: 13px; }
 .reason + .hosts-label { margin-top: 10px; }
 .hosts { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 0; padding: 0; list-style: none; }
@@ -471,7 +471,7 @@ details[open] > summary.version-head::before { transform: rotate(90deg); }
   object-fit: contain;
 }
 .lightbox figcaption { max-width: 60em; text-align: center; font-size: 14px; }
-.lightbox-count { margin-left: 8px; color: rgb(242 244 247 / 60%); white-space: nowrap; }
+.lightbox-count { margin-inline-start: 8px; color: rgb(242 244 247 / 60%); white-space: nowrap; }
 .lightbox-close, .lightbox-step {
   display: grid;
   place-items: center;
@@ -486,12 +486,14 @@ details[open] > summary.version-head::before { transform: rotate(90deg); }
 }
 .lightbox-close:hover, .lightbox-step:hover { background: rgb(255 255 255 / 20%); }
 .lightbox-close:focus-visible, .lightbox-step:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-.lightbox-close { position: absolute; top: 12px; right: 12px; z-index: 1; }
+.lightbox-close { position: absolute; top: 12px; inset-inline-end: 12px; z-index: 1; }
+/* Right to left pages step the other way, so the arrows turn round. */
+[dir="rtl"] .lightbox-step svg { transform: scaleX(-1); }
 .lightbox-step { margin: 0 16px; }
 @media (max-width: 640px) {
   .lightbox-step { position: absolute; bottom: 16px; margin: 0; }
-  .lightbox-previous { left: calc(50% - 56px); }
-  .lightbox-next { right: calc(50% - 56px); }
+  .lightbox-previous { inset-inline-start: calc(50% - 56px); }
+  .lightbox-next { inset-inline-end: calc(50% - 56px); }
   .lightbox figure { padding: 56px 8px 80px; }
   .lightbox img { max-height: calc(100dvh - 200px); }
 }

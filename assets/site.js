@@ -6,7 +6,7 @@
 // redirect, and a card leads to the plugin page. A screenshot opens larger
 // over the page, or as the image itself without it.
 (() => {
-  const LOCALES = ['en', 'zh_CN', 'zh_TW', 'ja_JP']
+  const LOCALES = ['en', 'zh_CN', 'zh_TW', 'ja_JP', 'ko_KR', 'de_DE', 'fr_FR', 'es', 'it_IT', 'pt_PT', 'ru_RU', 'uk_UA', 'tr_TR', 'vi_VN', 'ar']
   const THEMES = ['light', 'dark']
   const pathOf = locale => locale === 'en' ? '/' : `/${locale}/`
 
@@ -279,9 +279,12 @@
         box.close()
     })
     box.addEventListener('keydown', (event) => {
-      if (shots.length > 1 && event.key === 'ArrowLeft')
+      // On a right to left page the arrow keys follow the mirrored layout.
+      const back = document.documentElement.dir === 'rtl' ? 'ArrowRight' : 'ArrowLeft'
+      const forth = back === 'ArrowLeft' ? 'ArrowRight' : 'ArrowLeft'
+      if (shots.length > 1 && event.key === back)
         show(index - 1, -1)
-      if (shots.length > 1 && event.key === 'ArrowRight')
+      if (shots.length > 1 && event.key === forth)
         show(index + 1, 1)
     })
     let touchX = null
@@ -293,8 +296,10 @@
         return
       const dx = event.changedTouches[0].clientX - touchX
       touchX = null
+      // A swipe moves the strip the way the page reads.
+      const step = (dx > 0) === (document.documentElement.dir === 'rtl') ? 1 : -1
       if (Math.abs(dx) > 50)
-        show(dx > 0 ? index - 1 : index + 1, dx > 0 ? -1 : 1)
+        show(index + step, step)
     })
     // The image stays while the lightbox fades out.
     box.addEventListener('close', () => {
