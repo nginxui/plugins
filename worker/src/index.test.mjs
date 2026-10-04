@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { createHmac, createVerify, generateKeyPairSync } from 'node:crypto'
 import { afterEach, test } from 'node:test'
-import worker, { appJwt, normalizeRepository, pkcs8FromPem, validSignature } from './index.js'
+import worker, { appJwt, normalizeRepository, pkcs8FromPem, recordInstallation, validSignature } from './index.js'
 
 const secret = 'test-secret'
 const sign = body => `sha256=${createHmac('sha256', secret).update(body).digest('hex')}`
@@ -169,3 +169,64 @@ test('a delivery sent again is handled once', async () => {
   assert.equal(calls.filter(call => call.url.includes('/dispatches')).length, 1)
 })
 
+
+/** A D1 database that records the statements of each batch. */
+function fakeDatabase() {
+  const batches = []
+  return {
+    batches,
+    prepare: sql => ({ bind: (...values) => ({ sql, values }) }),
+    batch: async (statements) => { batches.push(statements) },
+  }
+}
+
+const owner = { id: 4242, login: 'octo-author', type: 'User' }
+
+test('an installation lets its sender claim the public repositories', async () => {
+  const db = fakeDatabase()
+  const response = await recordInstallation({ PORTAL_DB: db }, 'installation', {
+    action: 'created',
+    installation: { id: 9 },
+    sender: owner,
+    repositories: [
+      { id: 1, full_name: 'octo-author/geoip', private: false },
+      { id: 2, full_name: 'octo-author/secret', private: true },
+    ],
+  }, 1000)
+  assert.equal(response.status, 202)
+  assert.equal(db.batches.length, 1)
+  assert.deepEqual(db.batches[0].map(s => s.values), [[9, 1, 'octo-author/geoip', 4242, 'octo-author', 1000]])
+})
+
+test('a ghost or a bot sender grants nothing', async () => {
+  for (const sender of [{ id: 10137, login: 'ghost', type: 'User' }, { id: 5, login: 'some-bot[bot]', type: 'Bot' }]) {
+    const db = fakeDatabase()
+    await recordInstallation({ PORTAL_DB: db }, 'installation_repositories', {
+      action: 'added',
+      installation: { id: 9 },
+      sender,
+      repositories_added: [{ id: 1, full_name: 'octo-author/geoip', private: false }],
+    })
+    assert.equal(db.batches.length, 0)
+  }
+})
+
+test('removing the app or a repository ends the claim right', async () => {
+  const db = fakeDatabase()
+  await recordInstallation({ PORTAL_DB: db }, 'installation_repositories', {
+    action: 'removed',
+    installation: { id: 9 },
+    sender: owner,
+    repositories_removed: [{ id: 1, full_name: 'octo-author/geoip' }],
+  }, 2000)
+  await recordInstallation({ PORTAL_DB: db }, 'installation', { action: 'deleted', installation: { id: 9 }, sender: owner }, 3000)
+  assert.deepEqual(db.batches.map(b => b.map(s => s.values)), [[[2000, 9, 1]], [[3000, 9]]])
+  assert.match(db.batches[1][0].sql, /removed_at IS NULL/)
+})
+
+test('installation events pass through when the portal database is not bound', async () => {
+  fakeCache()
+  const response = await worker.fetch(delivery('installation', { action: 'created', installation: { id: 9 }, sender: owner, repositories: [] }), env)
+  assert.equal(response.status, 202)
+  assert.match(await response.text(), /not recorded/)
+})

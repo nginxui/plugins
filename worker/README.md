@@ -14,6 +14,11 @@ published catalog does not list, and runs `.github/workflows/deploy.yml`. The
 deploy reads every release from GitHub itself and verifies the packages, so a
 delivery only decides when the deploy runs.
 
+When the developer portal's database is bound as `PORTAL_DB`, the Worker
+also records the app's installation events there: who installed it on which
+public repository, and when it was removed. Installing an app takes admin
+rights on the repository, so the portal lets that person claim it.
+
 A repository starts the deploy at most once a minute, and no delivery starts
 one while a deploy is waiting to run: that deploy reads the newest releases
 when it starts. A delivery sent again is handled once.

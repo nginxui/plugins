@@ -19,3 +19,10 @@ DEPLOY_REF = "main"
 #   WEBHOOK_SECRET          webhook secret of the catalog GitHub App
 #   DEPLOY_APP_ID           id of the deploy GitHub App
 #   DEPLOY_APP_PRIVATE_KEY  private key of the deploy GitHub App
+
+# The developer portal's database (nginxui/plugin-portal), where installation
+# events are recorded so the sender can claim the repository.
+[[d1_databases]]
+binding = "PORTAL_DB"
+database_name = "portal"
+database_id = "aebdd686-03c1-4ef0-8146-adc51e848155"

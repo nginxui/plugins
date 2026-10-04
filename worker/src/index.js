@@ -12,6 +12,8 @@
 //   CATALOG_REPO            owner/name of the catalog repository
 //   DEPLOY_WORKFLOW         file name of the deploy workflow
 //   DEPLOY_REF              branch the deploy runs on
+//   PORTAL_DB               D1 database of the developer portal, optional;
+//                           installation events are recorded into it
 //
 // Two limits keep a busy repository from running the deploy over and over: a
 // repository starts it at most once per COOLDOWN_SECONDS, and nothing starts
@@ -51,6 +53,8 @@ export default {
     const event = request.headers.get('X-GitHub-Event')
     if (event === 'ping')
       return text('pong')
+    if (event === 'installation' || event === 'installation_repositories')
+      return recordInstallation(env, event, JSON.parse(body))
     if (event !== 'release')
       return text(`Ignored event ${event}`, 202)
 
@@ -70,6 +74,54 @@ export default {
     await startDeploy(env, token)
     return text(`Deploy started for ${repository}`, 202)
   },
+}
+
+// Installing the Catalog App on a repository takes admin rights on it, so the
+// sender of the event may claim the repository in the developer portal.
+// Private repositories are left out, the catalog lists public ones only.
+export async function recordInstallation(env, event, payload, now = Math.floor(Date.now() / 1000)) {
+  if (!env.PORTAL_DB)
+    return text('Installation events are not recorded', 202)
+  const installation = payload.installation?.id
+  const sender = payload.sender
+  if (!installation)
+    return text('Missing installation', 400)
+
+  const statements = []
+  const add = (repositories) => {
+    // A deleted account arrives as "ghost" and grants nothing.
+    if (!sender || sender.type !== 'User' || sender.login === 'ghost')
+      return
+    for (const repo of repositories ?? []) {
+      if (repo.private)
+        continue
+      statements.push(env.PORTAL_DB.prepare(
+        'INSERT INTO installations (installation_id, repo_id, repo_full_name, installed_by, installed_by_login, added_at) VALUES (?, ?, ?, ?, ?, ?)',
+      ).bind(installation, repo.id, repo.full_name, sender.id, sender.login, now))
+    }
+  }
+  const remove = (repositories) => {
+    for (const repo of repositories ?? []) {
+      statements.push(env.PORTAL_DB.prepare(
+        'UPDATE installations SET removed_at = ? WHERE installation_id = ? AND repo_id = ? AND removed_at IS NULL',
+      ).bind(now, installation, repo.id))
+    }
+  }
+
+  if (event === 'installation' && payload.action === 'created')
+    add(payload.repositories)
+  else if (event === 'installation' && payload.action === 'deleted')
+    statements.push(env.PORTAL_DB.prepare('UPDATE installations SET removed_at = ? WHERE installation_id = ? AND removed_at IS NULL').bind(now, installation))
+  else if (event === 'installation_repositories' && payload.action === 'added')
+    add(payload.repositories_added)
+  else if (event === 'installation_repositories' && payload.action === 'removed')
+    remove(payload.repositories_removed)
+  else
+    return text(`Ignored ${event} action ${payload.action}`, 202)
+
+  if (statements.length)
+    await env.PORTAL_DB.batch(statements)
+  return text(`Recorded ${event} ${payload.action}`, 202)
 }
 
 function text(message, status = 200) {
