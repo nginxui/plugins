@@ -1,69 +1,13 @@
 {
   "id": "com.nginxui.log-analytics",
   "name": {
-    "en": "Log Analytics",
-    "ja_JP": "ログ分析",
-    "zh_CN": "日志分析",
-    "zh_TW": "日誌分析"
-  },
-  "description": {
-    "en": "Search nginx access and error logs with structured queries and see traffic on a dashboard with a visitor map. Provides the former Advanced Indexing feature.",
-    "ja_JP": "Nginx のアクセスログとエラーログを構造化検索し、ダッシュボードと訪問者マップでトラフィックを確認します。以前の「高度なインデックス作成」機能を提供します。",
-    "zh_CN": "对 Nginx 访问日志和错误日志做结构化搜索，在面板和访客地图上查看流量。提供原“高级索引”功能。",
-    "zh_TW": "對 Nginx 存取日誌和錯誤日誌做結構化搜尋，在面板和訪客地圖上檢視流量。提供原「進階索引」功能。"
+    "en": "Log Analytics"
   },
   "author": "nginx-ui",
   "repository_url": "https://github.com/nginxui/plugin-log-analytics",
-  "readme_url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics/main/README.md",
-  "icon_url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics-webapp/main/public/icon.svg",
-  "screenshots": [
-    {
-      "url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics/main/docs/screenshots/1-dashboard.png",
-      "dark_url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics/main/docs/screenshots/1-dashboard-dark.png",
-      "caption": {
-        "en": "Visits, visitors, traffic and their trends at a glance",
-        "zh_CN": "一览访问量、访客、流量及其趋势",
-        "zh_TW": "一覽訪問量、訪客、流量及其趨勢",
-        "ja_JP": "アクセス数、訪問者、転送量とその推移をひと目で確認"
-      }
-    },
-    {
-      "url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics/main/docs/screenshots/2-map.png",
-      "dark_url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics/main/docs/screenshots/2-map-dark.png",
-      "caption": {
-        "en": "See where visitors come from on the world map",
-        "zh_CN": "在世界地图上查看访客来源",
-        "zh_TW": "在世界地圖上檢視訪客來源",
-        "ja_JP": "世界地図で訪問者の所在地を確認"
-      }
-    },
-    {
-      "url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics/main/docs/screenshots/3-regions.png",
-      "dark_url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics/main/docs/screenshots/3-regions-dark.png",
-      "caption": {
-        "en": "Open a country to see its regions",
-        "zh_CN": "点开国家查看各地区的访问",
-        "zh_TW": "點開國家檢視各地區的訪問",
-        "ja_JP": "国を開いて地域ごとのアクセスを確認"
-      }
-    },
-    {
-      "url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics/main/docs/screenshots/4-search.png",
-      "dark_url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics/main/docs/screenshots/4-search-dark.png",
-      "caption": {
-        "en": "Filter the access log by status, path, browser and more",
-        "zh_CN": "按状态码、路径、浏览器等筛选访问日志",
-        "zh_TW": "依狀態碼、路徑、瀏覽器等篩選存取日誌",
-        "ja_JP": "ステータス、パス、ブラウザーなどでアクセスログを絞り込み"
-      }
-    }
-  ],
   "categories": [
     "logs",
     "analytics"
-  ],
-  "capabilities": [
-    "http"
   ],
   "license": "AGPL-3.0-only",
   "trust": "official"

@@ -1,69 +1,13 @@
 {
   "id": "com.nginxui.log-analytics-tantivy",
   "name": {
-    "en": "Log Analytics (Preview)",
-    "ja_JP": "ログ分析（プレビュー）",
-    "zh_CN": "日志分析（预览）",
-    "zh_TW": "日誌分析（預覽）"
-  },
-  "description": {
-    "en": "Search nginx access and error logs with structured queries and field filters, and see traffic on a dashboard with a visitor map. Built with Rust for faster indexing and lower resource usage. This preview cannot be enabled together with Log Analytics.",
-    "ja_JP": "Nginx のアクセスログとエラーログを構造化検索してフィールドで絞り込み、ダッシュボードと訪問者マップでトラフィックを確認します。Rust で構築されており、インデックス作成が速く、リソース使用量も少なくなっています。プレビュー版のため、「ログ分析」と同時に有効にできません。",
-    "zh_CN": "对 Nginx 访问日志和错误日志做结构化搜索和按字段筛选，在面板和访客地图上查看流量。使用 Rust 构建，索引更快，资源占用更少。预览版，不能与“日志分析”同时启用。",
-    "zh_TW": "對 Nginx 存取日誌和錯誤日誌做結構化搜尋和依欄位篩選，在面板和訪客地圖上檢視流量。使用 Rust 建構，索引更快，資源佔用更少。預覽版，不能與「日誌分析」同時啟用。"
+    "en": "Log Analytics (Preview)"
   },
   "author": "nginx-ui",
   "repository_url": "https://github.com/nginxui/plugin-log-analytics-tantivy",
-  "readme_url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics-tantivy/main/README.md",
-  "icon_url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics-webapp/main/public/icon.svg",
-  "screenshots": [
-    {
-      "url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics-tantivy/main/docs/screenshots/1-dashboard.png",
-      "dark_url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics-tantivy/main/docs/screenshots/1-dashboard-dark.png",
-      "caption": {
-        "en": "Visits, visitors, traffic and their trends at a glance",
-        "zh_CN": "一览访问量、访客、流量及其趋势",
-        "zh_TW": "一覽訪問量、訪客、流量及其趨勢",
-        "ja_JP": "アクセス数、訪問者、転送量とその推移をひと目で確認"
-      }
-    },
-    {
-      "url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics-tantivy/main/docs/screenshots/2-regions.png",
-      "dark_url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics-tantivy/main/docs/screenshots/2-regions-dark.png",
-      "caption": {
-        "en": "Open a country to see its regions",
-        "zh_CN": "点开国家查看各地区的访问",
-        "zh_TW": "點開國家檢視各地區的訪問",
-        "ja_JP": "国を開いて地域ごとのアクセスを確認"
-      }
-    },
-    {
-      "url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics-tantivy/main/docs/screenshots/3-search.png",
-      "dark_url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics-tantivy/main/docs/screenshots/3-search-dark.png",
-      "caption": {
-        "en": "Search with field queries such as status:5xx",
-        "zh_CN": "用 status:5xx 这样的字段查询来搜索",
-        "zh_TW": "以 status:5xx 這類欄位查詢來搜尋",
-        "ja_JP": "status:5xx のようなフィールド指定で検索"
-      }
-    },
-    {
-      "url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics-tantivy/main/docs/screenshots/4-errors.png",
-      "dark_url": "https://raw.githubusercontent.com/nginxui/plugin-log-analytics-tantivy/main/docs/screenshots/4-errors-dark.png",
-      "caption": {
-        "en": "Search the error log by level and text",
-        "zh_CN": "按级别和内容搜索错误日志",
-        "zh_TW": "依層級和內容搜尋錯誤日誌",
-        "ja_JP": "レベルと内容でエラーログを検索"
-      }
-    }
-  ],
   "categories": [
     "logs",
     "analytics"
-  ],
-  "capabilities": [
-    "http"
   ],
   "license": "AGPL-3.0-only",
   "trust": "official"
