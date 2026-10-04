@@ -18,7 +18,7 @@
     },
     "name": {
       "$ref": "#/$defs/localizedText",
-      "description": "The listed name. en stays as reviewed, other languages override the translations of the plugin.json of the release the entry is listed with."
+      "description": "The listed name by language, en required. An official entry takes the languages it does not set from the plugin.json of the release it is listed with. Any other entry shows only the names set here: a name its plugin.json adds or changes, English included, waits for a maintainer, see scripts/ci/names.mjs."
     },
     "description": {
       "$ref": "#/$defs/localizedText",

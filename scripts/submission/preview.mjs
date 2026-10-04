@@ -11,15 +11,18 @@ import { readFileSync } from 'node:fs'
 import { displayRelease } from '../ci/listing.mjs'
 import { inferChannel } from '../ci/releases.mjs'
 
-/** Plain text that renders as itself in a GitHub comment. */
+/** Plain text that renders as itself in a GitHub comment. Characters that do
+ * not show, such as bidi overrides, are written out as \u{...}, so a review
+ * sees them. */
 export function escapeText(text) {
   return String(text ?? '')
+    .replace(/\r?\n/g, ' ')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/([\\`*_[\]#|~])/g, '\\$1')
+    .replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, char => `\\u{${char.codePointAt(0).toString(16)}}`)
     .replace(/@/g, '@\u200B')
-    .replace(/\r?\n/g, ' ')
 }
 
 function url(value) {

@@ -15,7 +15,7 @@
 //
 // Usage: node scripts/build-catalog.mjs [--out <dir>] [--published <url>|none]
 //          [--first-deploy] [--only <plugins/id.json>]... [--verify-newest]
-//          [--failures <file>]
+//          [--failures <file>] [--pending <file>]
 //
 //   --out <dir>        write the site there, default dist
 //   --published <url>  the site to read the published catalog and keyring
@@ -38,6 +38,9 @@
 //                      only read again once the release, its packages or the
 //                      key it is checked against change. CI keeps the file in
 //                      its cache.
+//   --pending <file>   writes the names waiting for review there, as
+//                      { plugins: [{ id, version, names, blocked }] }, for
+//                      .github/workflows/deploy.yml to ask the maintainers.
 //
 // Env: GITHUB_TOKEN (raises the API rate limit), PLUGIN_SIGNING_PUBLIC_KEY (the
 // official plugin key, see verify-release.mjs). Writes changed=true|false to
@@ -416,6 +419,7 @@ async function main() {
       'failures': { type: 'string' },
       'first-deploy': { type: 'boolean', default: false },
       'repin': { type: 'string', multiple: true, default: [] },
+      'pending': { type: 'string' },
     },
   })
   const repin = new Set(values.repin)
@@ -442,6 +446,7 @@ async function main() {
   const plugins = []
   const failures = []
   const iconFiles = new Map()
+  const pending = []
   for (const entry of loadEntries(values.only)) {
     const published = publishedById.get(entry.id)
     const result = await entryReleases(entry, published, { token, verifyNewest: values['verify-newest'], failed, visited, repin })
@@ -466,6 +471,10 @@ async function main() {
     }
     if (listing.icon)
       iconFiles.set(listing.icon.path, listing.icon.bytes)
+    if (listing.pending) {
+      pending.push({ id: entry.id, ...listing.pending })
+      console.log(`${entry.id}: names waiting for review in ${Object.keys({ ...listing.pending.names, ...listing.pending.blocked }).join(', ')}`)
+    }
     plugins.push(catalogEntry(entry, listing.fields, result.releases, result.provides))
     console.log(`${entry.id}: ${result.releases.map(release => release.version).join(', ') || 'no release'}`)
   }
@@ -527,6 +536,8 @@ async function main() {
   }
   writeFileSync(path.join(out, 'v1', 'index.json'), serialize(index))
   writeFileSync(path.join(out, 'v1', 'partners.json'), serializeKeyring(keyring))
+  if (values.pending)
+    writeFileSync(path.resolve(values.pending), serialize({ plugins: pending }))
 
   const changed = JSON.stringify(index) !== JSON.stringify(publishedIndex)
     || JSON.stringify(keyring) !== JSON.stringify(publishedKeyring)

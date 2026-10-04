@@ -11,6 +11,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { githubJson, listReleases, fetchRawFile, parseGithubRepoUrl } from '../ci/github.mjs'
 import { categoriesFromManifest } from '../ci/manifest-snapshot.mjs'
+import { pendingNames, reservedWord } from '../ci/names.mjs'
 import { findPlatformAssets, findPortableAsset } from '../ci/release-assets.mjs'
 import { tagVersion } from '../ci/releases.mjs'
 import { isSemver } from '../ci/semver.mjs'
@@ -120,6 +121,8 @@ export async function draftEntry(submission, { token, blocked = loadBlocked(), e
     return reject('The com.nginxui.* namespace is reserved for the plugins of the Nginx UI project. Use an id under your own namespace, such as io.github.<owner>.<name>.')
   if (typeof manifest.name !== 'string' || manifest.name.trim() === '')
     return reject(`plugin.json at ${release.tag_name} has no name.`)
+  if (reservedWord(manifest.name))
+    return reject(`The name ${JSON.stringify(manifest.name)} of plugin.json holds "${reservedWord(manifest.name)}", which no name may hold. Only the plugins of the Nginx UI project are official.`)
   const githubOwner = id.match(/^io\.github\.([a-z0-9-]+)\./)
   if (githubOwner && githubOwner[1] !== repository.owner.login.toLowerCase())
     return reject(`The id ${id} names the GitHub owner ${githubOwner[1]}, but ${repository.full_name} belongs to ${repository.owner.login}.`)
@@ -144,10 +147,15 @@ export async function draftEntry(submission, { token, blocked = loadBlocked(), e
     return reject(`Unknown categories: ${unknown.join(', ')}.`)
   const categories = (submission.categories?.length ? submission.categories : categoriesFromManifest(manifest)).slice(0, 3)
   const license = repository.license?.spdx_id
+  // The translated names are reviewed with the submission. One holding what
+  // no name may is left out, and the listing then reports it as blocked.
+  const translated = { ...pendingNames({}, manifest)?.names }
+  delete translated.en
+  const locales = Object.keys(translated).sort()
 
   const entry = {
     id,
-    name: { en: manifest.name },
+    name: { en: manifest.name.trim(), ...Object.fromEntries(locales.map(locale => [locale, translated[locale]])) },
     author: submission.submitter.login,
     author_public_key: primary.line,
     repository_url: `https://github.com/${repository.full_name}`,

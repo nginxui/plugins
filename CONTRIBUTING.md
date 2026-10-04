@@ -36,9 +36,10 @@ your primary public key and, if you like, the categories. The issue is the
 whole submission, there is no pull request to follow:
 
 1. `.github/workflows/submit-issue.yml` drafts `plugins/<id>.json` from your
-   newest release (`scripts/submission/`): the id and the English name come
-   from its `plugin.json`, the license from your repository, the categories
-   from your choice or the capabilities of the plugin.
+   newest release (`scripts/submission/`): the id and the names come from
+   its `plugin.json`, the license from your repository, the categories from
+   your choice or the capabilities of the plugin. The names are reviewed in
+   every language, and none may claim to be official.
 2. It checks the draft the way a pull request is checked, see
    [What `.github/workflows/validate.yml` checks](#what-githubworkflowsvalidateyml-checks),
    and posts a status comment with the result, what the listing will show
@@ -49,7 +50,10 @@ whole submission, there is no pull request to follow:
 4. A maintainer reviews the issue, see [Review and merge](#review-and-merge),
    and adds the `approved` label. The checks run once more and the entry is
    committed to `main`, credited to you. The deploy then comments the plugin
-   page and closes the issue. An edit after the approval withdraws it.
+   page, labels the issue `listed` and closes it. An edit after the approval
+   withdraws it. From then on the issue follows your listing: it opens again
+   when a release names your plugin in a new way, see
+   [What your releases change](#what-your-releases-change).
    Approving, listing and a withdrawn approval each add a short comment, so
    the people concerned are notified.
 
@@ -68,7 +72,7 @@ lists no releases: they are read from your GitHub Releases (see below).
 Required fields and what they mean are documented in
 `schema/entry.schema.json`; in particular:
 
-- `name` is a locale map with the reviewed English name, `{ "en": "..." }`.
+- `name` is a locale map of the reviewed names, `{ "en": "...", "zh_CN": "..." }`.
   Everything else the listing shows comes from the `plugin.json` of your
   newest stable release, see [What your releases change](#what-your-releases-change):
   leave `description`, `homepage_url`, `readme_url`, `icon_url` and
@@ -163,15 +167,33 @@ that is not yanked, or the newest release while there is no stable one:
 
 | Listing | From that release |
 | --- | --- |
-| Name translations | `i18n.<language>.name` of `plugin.json`. The English name stays the one in your entry, change it with a pull request. |
-| Description | `description` and `i18n.<language>.description` of `plugin.json` |
+| Name | `name` and `i18n.<language>.name` of `plugin.json`, once a maintainer approved it, see below. |
+| Description | `description` and `i18n.<language>.description` of `plugin.json`, unless it claims to be official, see below. |
 | Homepage | `homepage_url` of `plugin.json` |
 | README | `README.md` at the tag of the release |
 | Icon | the file `icon_path` of `plugin.json` names in the package, PNG, WebP or SVG of at most 256 KB, which the catalog serves |
 | Screenshots | `screenshots` of `plugin.json`, read from your repository at the tag, see [Manifest](https://nginxui.com/plugin/manifest#screenshots) |
 
-A field your entry sets wins: per language for the name and the description,
-as a whole for the others. Maintainers use this to correct a listing. The
+A name can claim to be official in any language, so every name is reviewed,
+English included. The listing shows the names of your entry. When a release
+names your plugin in a way your entry does not hold, in any language, the
+deploy reopens the issue of your plugin (your submission issue, or one it
+opens) with a checkbox per name. A maintainer ticks the names to list, which
+adds them to your entry, or declines the rest; until then the listing keeps
+the names it had. A name holding a word such as "official" or "官方", or a
+character that does not show, is left out.
+
+Descriptions are not reviewed. One that names Nginx UI and claims to be
+official in the same sentence, such as "the official Nginx UI DNS plugin",
+or holds a character that does not show, is left out, the listing keeps the
+description it had, and the issue of your plugin says so. "The official
+Cloudflare API" is fine.
+
+The official plugins of the Nginx UI project take their names and
+descriptions from their releases directly.
+
+A field your entry sets wins: per language for the description, as a whole
+for the others. Maintainers use this to correct a listing. The
 deploy lists every entry whose listing changed in its job summary, and the
 maintainers look over the changes after the fact.
 

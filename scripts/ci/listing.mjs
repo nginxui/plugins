@@ -3,18 +3,22 @@
 // is the newest stable release that is not yanked, else the newest one that
 // is not yanked. From it come:
 //
-// - name: the translations of the manifest; the English name stays the one of
-//   plugins/<id>.json, a new name goes through review.
-// - description: the manifest's, English and translations.
+// - name: an official entry takes the translations of the manifest and its
+//   English name from plugins/<id>.json. Any other entry shows the names its
+//   entry holds and reports the others, English too, as pending (names.mjs).
+// - description: the manifest's, English and translations. For an entry that
+//   is not official, one claiming to be an official Nginx UI plugin is left
+//   out, the published one stays, and it is reported as pending.
 // - homepage_url and capabilities: the manifest's.
 // - readme_url: README.md at the tag, when it exists.
 // - screenshots: the manifest's, read from the repository at the tag, the
 //   ones that answer as an image of at most 2 MB.
 // - icon_url: the icon inside the package, which the catalog serves.
 //
-// Whatever plugins/<id>.json sets wins: for name and description per
-// language, for the other fields as a whole. Used by scripts/build-catalog.mjs.
+// Whatever plugins/<id>.json sets wins: for description per language, for the
+// other fields as a whole. Used by scripts/build-catalog.mjs.
 
+import { descriptionProblem, manifestNames, pendingNames } from './names.mjs'
 import { inferChannel } from './releases.mjs'
 
 // Image types and the largest screenshot a listing shows.
@@ -98,9 +102,11 @@ function manifestScreenshots(manifest, repo, tag) {
  * built releases, published the published entry or undefined. tags maps a
  * version to its tag, icons maps a version verified in this build to the icon
  * of its package, site is where the catalog is served. Returns
- * { fields, icon, warnings }: icon is { path, bytes } to serve, or
+ * { fields, icon, pending, warnings }: icon is { path, bytes } to serve, or
  * { version, candidates } for the paths to carry over from the published site,
- * which then also give icon_url when the entry sets none.
+ * which then also give icon_url when the entry sets none. pending is
+ * { version, names, blocked, descriptions } for the names waiting for review
+ * and the descriptions left out, see names.mjs.
  */
 export async function deriveListing(entry, releases, published, { repo, tags, icons, site }) {
   const warnings = []
@@ -109,14 +115,32 @@ export async function deriveListing(entry, releases, published, { repo, tags, ic
   const tag = shown ? tags.get(shown.version) : undefined
   const fields = {}
 
-  fields.name = sortedLocales({
-    ...localized(undefined, Object.fromEntries(Object.entries(manifest.i18n ?? {}).map(([locale, text]) => [locale, text?.name]))),
-    ...entry.name,
-  })
-  fields.description = sortedLocales({
-    ...localized(manifest.description, Object.fromEntries(Object.entries(manifest.i18n ?? {}).map(([locale, text]) => [locale, text?.description]))),
-    ...entry.description,
-  })
+  const official = entry.trust === 'official'
+  const given = localized(manifest.description, Object.fromEntries(Object.entries(manifest.i18n ?? {}).map(([locale, text]) => [locale, text?.description])))
+  let descriptions
+  for (const [locale, text] of Object.entries(official ? {} : given)) {
+    const word = entry.description?.[locale] ? '' : descriptionProblem(text)
+    if (!word)
+      continue
+    descriptions = { ...descriptions, [locale]: { text, word } }
+    const kept = published?.description?.[locale]
+    if (kept && !descriptionProblem(kept))
+      given[locale] = kept
+    else
+      delete given[locale]
+  }
+
+  let pending
+  if (official) {
+    fields.name = sortedLocales({ ...manifestNames(manifest), ...entry.name })
+  }
+  else {
+    fields.name = sortedLocales({ ...entry.name })
+    const names = shown && pendingNames(entry.name, manifest)
+    if (names || descriptions)
+      pending = { version: shown.version, names: names?.names ?? {}, blocked: names?.blocked ?? {}, ...(descriptions ? { descriptions } : {}) }
+  }
+  fields.description = sortedLocales({ ...given, ...entry.description })
   if (!fields.description.en) {
     warnings.push(`${entry.id}: no English description in plugins/${entry.id}.json or the plugin.json of its release`)
     delete fields.description
@@ -180,7 +204,7 @@ export async function deriveListing(entry, releases, published, { repo, tags, ic
   else if (icon?.bytes)
     fields.icon_url = `${site.replace(/\/+$/, '')}/${icon.path}`
 
-  return { fields, icon, warnings }
+  return { fields, icon, pending, warnings }
 }
 
 // The fields a listing change report compares.

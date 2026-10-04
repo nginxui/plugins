@@ -13,8 +13,12 @@ name: Submit issue
 #   whose commit starts the deploy. The deploy comments the plugin page and
 #   closes the issue.
 #
-# The approval holds only for the issue body the last checks saw: an edit
-# afterwards removes the label. Approving, listing and a withdrawn approval
+# The approval holds only for the issue body and the drafted entry the last
+# checks saw: an edit afterwards removes the label, and so does a release that
+# drafts a different entry by the time the label is added. Once listed, the deploy labels the issue
+# "listed": from then on it follows the listing (scripts/ci/name-review.mjs
+# reopens it for names to review) and this workflow leaves it alone, whatever
+# its author edits. Approving, listing and a withdrawn approval
 # each get a short comment of their own, since an edited comment notifies
 # nobody. The App is installed on nginxui/plugins only,
 # with Contents write. Variable SUBMIT_APP_CLIENT_ID and secret
@@ -54,6 +58,10 @@ jobs:
             }
             const removeLabel = name => github.rest.issues.removeLabel({ ...where, name }).catch(() => {})
 
+            // A listed submission is done, reopened or not.
+            if (labels.includes('listed'))
+              return decide('skip')
+
             if (action === 'labeled' && label.name === 'submission')
               return decide('check')
             if (action === 'edited') {
@@ -79,7 +87,7 @@ jobs:
             }
             const comments = await github.paginate(github.rest.issues.listComments, { ...where, per_page: 100 })
             const report = comments.findLast(comment => comment.user?.type === 'Bot' && comment.body?.includes('<!-- submission '))
-            const marker = report?.body.match(/<!-- submission body=([0-9a-f]{64}) status=(\w+) -->/)
+            const marker = report?.body.match(/<!-- submission body=([0-9a-f]{64}) status=(\w+)(?: entry=[0-9a-f]{64})? -->/)
             const body = createHash('sha256').update(issue.body ?? '').digest('hex')
             if (!marker || marker[1] !== body) {
               await removeLabel('approved')
@@ -175,8 +183,11 @@ jobs:
             const where = { ...context.repo, issue_number: issue.number }
             // Text from the submission neither renders HTML nor mentions anyone.
             const plain = text => (text ?? '').replace(/</g, '&lt;').replace(/@/g, '@\u200B')
+            const { createHash } = require('node:crypto')
             const comments = await github.paginate(github.rest.issues.listComments, { ...where, per_page: 100 })
             const previous = comments.findLast(comment => comment.user?.type === 'Bot' && comment.body?.includes('<!-- submission '))
+            // The entry the maintainer approved, as the last checks drafted it.
+            const approvedEntry = previous?.body.match(/<!-- submission [^>]* entry=([0-9a-f]{64}) -->/)?.[1]
             // The status comment is updated in place, an event gets a comment
             // of its own, which notifies the people it concerns.
             const saveStatus = async body => previous
@@ -205,19 +216,27 @@ jobs:
                 : `**Submitter**: ${env.ELIGIBILITY}. Submit from the account that owns the repository, make your membership of its organization public, or add the \`nginx-ui-plugin\` topic to the repository, then edit this issue. Otherwise a maintainer confirms that the repository agrees to be listed.`, '')
               if (env.PREVIEW)
                 lines.push('### Listing preview', '', env.PREVIEW, '')
-              lines.push('<details><summary>Drafted entry</summary>', '', '```json', env.ENTRY.trim(), '```', '', '</details>', '')
+              // \u003c keeps the JSON valid and its text from opening a comment.
+              lines.push('<details><summary>Drafted entry</summary>', '', '```json', env.ENTRY.trim().replace(/</g, '\\u003c'), '```', '', '</details>', '')
               if (passed && env.MODE === 'check')
                 lines.push('A maintainer reviews the submission and lists it by adding the `approved` label.')
             }
 
-            lines.push('', `<!-- submission body=${env.BODY_SHA256} status=${status} -->`)
+            const entrySha = createHash('sha256').update(env.ENTRY ?? '').digest('hex')
+            lines.push('', `<!-- submission body=${env.BODY_SHA256} status=${status}${env.ENTRY ? ` entry=${entrySha}` : ''} -->`)
             await saveStatus(lines.join('\n'))
             if (env.NOTE)
               await postEvent(env.NOTE)
 
             if (env.MODE === 'write') {
               const approver = context.payload.sender.login
-              if (!env.APP_TOKEN) {
+              if (env.APP_TOKEN && approvedEntry !== entrySha) {
+                // A release since the last checks drafts another entry, such
+                // as other names: what was approved is not what would list.
+                await github.rest.issues.removeLabel({ ...where, name: 'approved' }).catch(() => {})
+                await postEvent(`@${approver} The approval was removed: the newest release drafts a different entry than the one approved, see the status comment above. Approve it again once you reviewed it.`)
+              }
+              else if (!env.APP_TOKEN) {
                 await github.rest.issues.removeLabel({ ...where, name: 'approved' }).catch(() => {})
                 await postEvent(`@${approver} The approval was removed: the checks did not pass when listing, see the status comment above.`)
               }

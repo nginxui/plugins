@@ -9,7 +9,9 @@ name: Deploy
 # worker/ runs it by hand as soon as a listed plugin releases. A scheduled run
 # that builds the same catalog and keyring as the published ones deploys
 # nothing. When the change lists a submitted plugin (submit-issue.yml), the
-# deploy comments the plugin page on the submission issue and closes it.
+# deploy comments the plugin page on the submission issue, labels it "listed"
+# and closes it. A name a listing does not show yet goes to the maintainers on
+# the issue of its plugin (scripts/ci/name-review.mjs, review-names.yml).
 #
 # Secrets: CLOUDFLARE_API_TOKEN (Pages edit) and CLOUDFLARE_ACCOUNT_ID of the
 # "cloudflare" environment, and the organization PLUGIN_SIGNING_KEY that
@@ -91,7 +93,7 @@ jobs:
           FIRST_DEPLOY: ${{ inputs.first_deploy }}
           REPIN: ${{ inputs.repin }}
         run: |
-          args=(--out dist --failures .cache/verify-failures.json)
+          args=(--out dist --failures .cache/verify-failures.json --pending pending-names.json)
           if [ "${FIRST_DEPLOY}" = "true" ]; then
             args+=(--first-deploy)
           fi
@@ -178,7 +180,22 @@ jobs:
             }
             const page = `${process.env.SITE.replace(/\/+$/, '')}/plugins/${id}/`
             await github.rest.issues.createComment({ ...where, body: `Listed: ${page}\n\nNew releases are listed on their own from now on, and the listing follows the newest stable release.` })
+            // From now on the issue follows the listing, submit-issue.yml leaves it alone.
+            await github.rest.issues.addLabels({ ...where, labels: ['listed'] })
             await github.rest.issues.update({ ...where, state: 'closed', state_reason: 'completed' })
+
+      - name: Ask for name reviews
+        if: steps.build.outcome == 'success' && (steps.deploy.outcome == 'success' || steps.deploy.outcome == 'skipped')
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('node:fs')
+            const { syncNameReviews } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/ci/name-review.mjs`)
+            const pending = JSON.parse(fs.readFileSync('pending-names.json', 'utf8'))
+            const entries = new Map(fs.readdirSync('plugins').filter(file => file.endsWith('.json'))
+              .map(file => JSON.parse(fs.readFileSync(`plugins/${file}`, 'utf8'))).map(entry => [entry.id, entry]))
+            for (const line of await syncNameReviews({ github, repo: context.repo, pending, entries }))
+              core.info(line)
 
       - uses: actions/upload-artifact@v7
         with:

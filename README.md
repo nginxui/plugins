@@ -84,11 +84,14 @@ snapshot of the tag, the release notes and the channel. Then:
   `signer`.
 - The entry shows what the release it is listed with gives: the newest
   stable release that is not yanked, else the newest one. Its `plugin.json`
-  gives the description, the name translations, the homepage and the
-  screenshots, the tag gives the README, and the package gives the icon,
-  which the catalog serves under `v1/icons/`. A field `plugins/<id>.json`
-  sets wins, and the English name always comes from there. The deploy lists
-  the entries whose listing changed in its job summary.
+  gives the description, the homepage and the screenshots, the tag gives the
+  README, and the package gives the icon, which the catalog serves under
+  `v1/icons/`. A field `plugins/<id>.json` sets wins. The names come from
+  there: a name its `plugin.json` adds or changes, English too, waits for a
+  maintainer on the issue of the plugin (`.github/workflows/review-names.yml`),
+  and a description claiming to be an official Nginx UI plugin is left out,
+  except for the official plugins. The deploy lists the entries whose listing changed in
+  its job summary.
 
 The deploy runs on every change of `main`, every hour and by hand, so a
 plugin release reaches the catalog within the hour without anyone touching

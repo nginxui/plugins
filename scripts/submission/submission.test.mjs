@@ -69,6 +69,16 @@ test('a submission drafts an entry from the newest stable release', async () => 
   assert.deepEqual(picked.entry.categories, ['tools'])
 })
 
+test('a submission reviews the translated names with the English one', async () => {
+  manifest.i18n = { zh_TW: { name: '示範' }, zh_CN: { name: '演示' }, ja_JP: { name: '公式デモ' }, ko_KR: { name: '' } }
+  const { entry } = await draftEntry(submission(), options())
+  // In order, empty ones and the one holding a reserved word left out.
+  assert.deepEqual(Object.entries(entry.name), [['en', 'Demo'], ['zh_CN', '演示'], ['zh_TW', '示範']])
+
+  manifest.name = 'Official Demo'
+  assert.match((await draftEntry(submission(), options())).rejection, /holds "official", which no name may hold/)
+})
+
 test('a submission is rejected with a reason the author can act on', async () => {
   const rejected = async (sub, opts = options()) => (await draftEntry(sub, opts)).rejection ?? ''
   assert.match(await rejected(submission({ repository_url: 'https://gitlab.com/alice/demo' })), /not a github\.com repository/)

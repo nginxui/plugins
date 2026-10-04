@@ -1,0 +1,130 @@
+name: Review names
+
+# Lists or declines the names a maintainer ticks in a review comment of the
+# deploy (scripts/ci/name-review.mjs). A ticked name is committed to
+# plugins/<id>.json by the NGINX UI Catalog Submissions App, whose commit
+# starts the deploy. "Decline" keeps the names left unticked off the listing
+# until the plugin names them differently. Once nothing is left to decide, the
+# issue closes again.
+#
+# The comment is the deploy's, and only people with write access can tick a
+# box in a comment of someone else; the sender is checked again here. The
+# names come from the comment itself, so a maintainer lists exactly what it
+# shows. What to do is read from the comment as it is when the run starts:
+# a ticked name not yet marked as listed is approved, so ticks whose runs were
+# cancelled in the queue are not lost. Variable SUBMIT_APP_CLIENT_ID and secret SUBMIT_APP_PRIVATE_KEY hold
+# the App's credentials, as for submit-issue.yml.
+on:
+  issue_comment:
+    types: [edited]
+
+permissions: {}
+
+concurrency:
+  group: review-names-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  review:
+    name: Apply the review
+    if: github.event.comment.user.login == 'github-actions[bot]' && contains(github.event.comment.body, '<!-- names:open ')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # The comment as it is now, not as the event saw it: a run cancelled in
+      # the queue or a deploy meanwhile leaves its ticks there.
+      - id: decide
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { pendingDecision } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/ci/name-review.mjs`)
+            const { data: current } = await github.rest.issues.getComment({ ...context.repo, comment_id: context.payload.comment.id })
+            const decision = current.user?.login === 'github-actions[bot]' ? pendingDecision(current.body) : null
+            if (!decision)
+              return core.setOutput('apply', 'false')
+            const { sender } = context.payload
+            const { data: access } = await github.rest.repos.getCollaboratorPermissionLevel({ ...context.repo, username: sender.login })
+            if (!['admin', 'write'].includes(access.permission))
+              return core.setOutput('apply', 'false')
+            core.setOutput('apply', 'true')
+            core.setOutput('commit', String(decision.approve.length > 0))
+
+      # Minted only to commit names a maintainer approved.
+      - id: app
+        if: steps.decide.outputs.commit == 'true'
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.SUBMIT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.SUBMIT_APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - if: steps.decide.outputs.apply == 'true'
+        uses: actions/github-script@v9
+        env:
+          APP_TOKEN: ${{ steps.app.outputs.token }}
+        with:
+          script: |
+            const { closeReview, pendingDecision, settleReview, untick, withNames } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/ci/name-review.mjs`)
+            const { validateAgainstSchemaFile } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/lib/schema-validator.mjs`)
+            const { sender, issue } = context.payload
+            const commentId = context.payload.comment.id
+            const read = async () => (await github.rest.issues.getComment({ ...context.repo, comment_id: commentId })).data.body
+            const decision = pendingDecision(await read())
+            if (!decision)
+              return
+            const { review, approve } = decision
+            const file = `plugins/${review.id}.json`
+
+            if (approve.length > 0) try {
+              if (!process.env.APP_TOKEN)
+                throw new Error('no token to commit with')
+              const app = getOctokit(process.env.APP_TOKEN)
+              const names = Object.fromEntries(approve.map(locale => [locale, review.names[locale]]))
+              const message = [
+                `feat(plugins): approve the ${approve.join(', ')} names of ${review.id}`,
+                '',
+                `Approved by @${sender.login} in #${issue.number}`,
+              ].join('\n')
+              let committed
+              for (let attempt = 0; attempt < 3 && !committed; attempt++) {
+                const { data: ref } = await app.rest.git.getRef({ ...context.repo, ref: 'heads/main' })
+                const { data: parent } = await app.rest.git.getCommit({ ...context.repo, commit_sha: ref.object.sha })
+                const { data: current } = await app.rest.repos.getContent({ ...context.repo, path: file, ref: parent.sha })
+                const content = withNames(Buffer.from(current.content, 'base64').toString('utf8'), names)
+                const errors = validateAgainstSchemaFile(`${process.env.GITHUB_WORKSPACE}/schema/entry.schema.json`, JSON.parse(content))
+                if (errors.length > 0)
+                  throw new Error(`${file} would not be valid: ${errors.join('; ')}`)
+                const { data: tree } = await app.rest.git.createTree({ ...context.repo, base_tree: parent.tree.sha,
+                  tree: [{ path: file, mode: '100644', type: 'blob', content }] })
+                const { data: commit } = await app.rest.git.createCommit({ ...context.repo, message, tree: tree.sha, parents: [parent.sha] })
+                try {
+                  await app.rest.git.updateRef({ ...context.repo, ref: 'heads/main', sha: commit.sha })
+                  committed = commit
+                }
+                catch (err) {
+                  // Main moved meanwhile, build on the new head.
+                  if (err.status !== 422)
+                    throw err
+                }
+              }
+              if (!committed)
+                throw new Error('main kept moving')
+            }
+            catch (err) {
+              // Clear the boxes again, so ticking them retries.
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: commentId, body: untick(await read(), approve) })
+              throw err
+            }
+
+            // Settled on the newest text, which keeps ticks made meanwhile for
+            // the run they queued.
+            const settled = settleReview(await read(), decision, sender.login)
+            await github.rest.issues.updateComment({ ...context.repo, comment_id: commentId, body: settled.body })
+            if (settled.done)
+              await closeReview(github, context.repo, issue.number)

@@ -57,9 +57,10 @@ test('a listing comes from the display release, the entry overrides it', async (
   answers.set(raw('docs/2.png'), 'text/html')
   const icons = new Map([['1.1.0', { type: 'svg', bytes: Buffer.from('<svg/>') }]])
 
-  const { fields, icon, warnings } = await deriveListing({ ...entry, description: { ja_JP: 'もの' } }, releases, undefined, { repo, tags, icons, site })
-  // The English name stays the reviewed one, empty translations are left out.
-  assert.deepEqual(Object.entries(fields.name), [['en', 'Demo'], ['zh_CN', '演示']])
+  const { fields, icon, pending, warnings } = await deriveListing({ ...entry, description: { ja_JP: 'もの' } }, releases, undefined, { repo, tags, icons, site })
+  // A community listing shows the reviewed names only, the manifest's wait.
+  assert.deepEqual(fields.name, { en: 'Demo' })
+  assert.deepEqual(pending, { version: '1.1.0', names: { zh_CN: '演示' }, blocked: {} })
   assert.deepEqual(Object.entries(fields.description), [['en', 'Does things'], ['ja_JP', 'もの'], ['zh_CN', '做事情']])
   assert.equal(fields.homepage_url, 'https://example.com/demo')
   assert.equal(fields.readme_url, raw('README.md'))
@@ -67,6 +68,51 @@ test('a listing comes from the display release, the entry overrides it', async (
   assert.match(warnings.join('\n'), /docs\/2\.png is text\/html/)
   assert.equal(fields.icon_url, `${site}/v1/icons/io.github.example.demo/1.1.0.svg`)
   assert.equal(icon.path, 'v1/icons/io.github.example.demo/1.1.0.svg')
+})
+
+test('an official listing takes the translated names of its release', async () => {
+  const { fields, pending } = await deriveListing({ ...entry, trust: 'official', name: { en: 'Demo', ja_JP: 'デモ' } }, releases, undefined, { repo, tags, icons: new Map(), site })
+  // Empty translations are left out, the entry's win.
+  assert.deepEqual(Object.entries(fields.name), [['en', 'Demo'], ['ja_JP', 'デモ'], ['zh_CN', '演示']])
+  assert.equal(pending, undefined)
+})
+
+test('a reviewed name is listed and no longer pending', async () => {
+  const { fields, pending } = await deriveListing({ ...entry, name: { en: 'Demo', zh_CN: '演示' } }, releases, undefined, { repo, tags, icons: new Map(), site })
+  assert.deepEqual(fields.name, { en: 'Demo', zh_CN: '演示' })
+  assert.equal(pending, undefined)
+
+  // A changed translation waits again, the reviewed one stays listed.
+  const renamed = [releases[0], { ...releases[1], manifest: { ...manifest, i18n: { zh_CN: { name: '官方演示' }, zh_TW: { name: '示範' } } } }]
+  const changed = await deriveListing({ ...entry, name: { en: 'Demo', zh_CN: '演示' } }, renamed, undefined, { repo, tags, icons: new Map(), site })
+  assert.deepEqual(changed.fields.name, { en: 'Demo', zh_CN: '演示' })
+  assert.deepEqual(changed.pending, { version: '1.1.0', names: { zh_TW: '示範' }, blocked: { zh_CN: { name: '官方演示', word: '官方' } } })
+})
+
+test('a renamed plugin waits for review, a description claiming to be official is left out', async () => {
+  const claimed = { ...manifest, name: 'Demo Pro', description: 'The official Nginx UI demo.', i18n: { zh_CN: { name: '演示', description: 'Nginx UI 官方演示' } } }
+  const renamed = [releases[0], { ...releases[1], manifest: claimed }]
+  const published = { description: { en: 'Does things' } }
+  const { fields, pending } = await deriveListing({ ...entry, name: { en: 'Demo', zh_CN: '演示' } }, renamed, published, { repo, tags, icons: new Map(), site })
+  assert.deepEqual(fields.name, { en: 'Demo', zh_CN: '演示' })
+  // The published description stays where there is one.
+  assert.deepEqual(fields.description, { en: 'Does things' })
+  assert.deepEqual(pending, {
+    version: '1.1.0',
+    names: { en: 'Demo Pro' },
+    blocked: {},
+    descriptions: {
+      en: { text: 'The official Nginx UI demo.', word: 'a claim to be official' },
+      zh_CN: { text: 'Nginx UI 官方演示', word: 'a claim to be official' },
+    },
+  })
+
+  // An official entry is not checked, and the entry's description wins.
+  const official = await deriveListing({ ...entry, trust: 'official' }, renamed, published, { repo, tags, icons: new Map(), site })
+  assert.equal(official.fields.description.en, 'The official Nginx UI demo.')
+  assert.equal(official.pending, undefined)
+  const overridden = await deriveListing({ ...entry, description: { en: 'A demo.' } }, renamed, published, { repo, tags, icons: new Map(), site })
+  assert.deepEqual(Object.keys(overridden.pending.descriptions), ['zh_CN'])
 })
 
 test('what the published listing checked is not fetched again', async () => {
